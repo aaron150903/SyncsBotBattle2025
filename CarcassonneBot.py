@@ -18,6 +18,106 @@ class BotState:
     def __init__(self) -> None:
         self.last_tile: TileModel | None = None
 
+class TileEncoding:
+    def __init__(self, top_edge: list[str], right_edge: list[str], bottom_edge: list[str], left_edge: list[str], center: list[str]):
+        self.top_edge = top_edge
+        self.right_edge = right_edge
+        self.bottom_edge = bottom_edge
+        self.left_edge = left_edge
+        self.center = center
+
+class TileProbability:
+    def __init__(self):
+        # F = Field, R = Road, M = Monastery, C = City
+        self.tile_map = {
+            # A: Monastery with road (2x)
+            TileEncoding(['F'], ['F'], ['F', 'R', 'F'], ['F'], ['M']): 2,
+            
+            # B: Monastery alone (4x)
+            TileEncoding(['F'], ['F'], ['F'], ['F'], ['M']): 4,
+            
+            # C: Large city with pennant (1x)
+            TileEncoding(['C'], ['C'], ['C'], ['C'], ['C']): 1,
+            
+            # D: City corner with road (4x) - includes start tile
+            TileEncoding(['F'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 4,
+            
+            # E: City corner (5x)
+            TileEncoding(['F'], ['F'], ['F'], ['C'], ['F']): 5,
+            
+            # F: City on two adjacent sides (2x)
+            TileEncoding(['C'], ['C'], ['F'], ['F'], ['F']): 2,
+            
+            # G: City on opposite sides (1x)
+            TileEncoding(['C'], ['F'], ['C'], ['F'], ['C']): 1,
+            
+            # H: City on three sides (3x)
+            TileEncoding(['C'], ['C'], ['F'], ['C'], ['C']): 3,
+            
+            # I: City on three sides with road (2x)
+            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['C'], ['C']): 2,
+            
+            # J: City corner with road on adjacent side (3x)
+            TileEncoding(['C'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 3,
+            
+            # K: City corner with road on opposite side (3x)
+            TileEncoding(['C'], ['F'], ['F', 'R', 'F'], ['C'], ['F']): 3,
+            
+            # L: City corner with road on far side (3x)
+            TileEncoding(['C'], ['F'], ['F'], ['F', 'R', 'F'], ['F']): 3,
+            
+            # M: City with pennant on diagonal (2x)
+            TileEncoding(['C'], ['F'], ['F'], ['C'], ['F']): 2,
+            
+            # N: City with pennant on three sides (3x)
+            TileEncoding(['C'], ['C'], ['F'], ['C'], ['C']): 3,
+            
+            # O: City with pennant on diagonal plus road (2x)
+            TileEncoding(['C'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 2,
+            
+            # P: City with pennant on three sides plus road (3x)
+            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['C'], ['C']): 3,
+            
+            # Q: City with pennant on two adjacent sides (1x)
+            TileEncoding(['C'], ['C'], ['F'], ['F'], ['C']): 1,
+            
+            # R: City with pennant on two adjacent sides (3x)
+            TileEncoding(['C'], ['C'], ['F'], ['F'], ['C']): 3,
+            
+            # S: City with pennant on two adjacent sides plus road (2x)
+            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['F'], ['C']): 2,
+            
+            # T: City with pennant on two adjacent sides plus road (1x)
+            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['F'], ['C']): 1,
+            
+            # U: Straight road (8x)
+            TileEncoding(['F', 'R', 'F'], ['F'], ['F', 'R', 'F'], ['F'], ['F']): 8,
+            
+            # V: Curved road (9x)
+            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F'], ['F'], ['F']): 9,
+            
+            # W: T-junction road (4x)
+            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F'], ['F', 'R', 'F'], ['F']): 4,
+    
+            # X: 4-way intersection (1x)
+            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F', 'R', 'F'], ['F', 'R', 'F'], ['F']): 1,
+        }
+        self.total_tiles = 72
+
+    def calculate_probability(self, required_tile: TileEncoding):
+        matching_tile_amount = 0
+        for tile in self.tile_map:
+            matching_tile_amount = self.tile_map[tile] if (tile.top_edge == required_tile.top_edge and tile.right_edge == required_tile.right_edge and tile.bottom_edge == required_tile.bottom_edge and tile.left_edge == required_tile.left_edge and tile.center == required_tile.center) else 0
+        return (matching_tile_amount / self.total_tiles)
+    
+    def update_tile_distribution(self, used_tile: TileEncoding):
+        matching_tile = None
+        for tile in self.tile_map:
+            matching_tile = tile if (used_tile.top_edge == matching_tile.top_edge and used_tile.right_edge == tile.right_edge and used_tile.bottom_edge == tile.bottom_edge and used_tile.left_edge == tile.bottom_edge and used_tile.center == tile.center) else None
+        self.tile_map[matching_tile] = self.tile_map[matching_tile] - 1 if matching_tile != None else self.tile_map[matching_tile]
+
+
+
 def main() -> None:
     game = Game()
     bot_state = BotState()
