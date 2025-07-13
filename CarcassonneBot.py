@@ -117,7 +117,6 @@ class TileProbability:
         self.tile_map[matching_tile] = self.tile_map[matching_tile] - 1 if matching_tile != None else self.tile_map[matching_tile]
 
 
-
 def main() -> None:
     game = Game()
     bot_state = BotState()
@@ -161,11 +160,18 @@ def get_valid_moves(game: Game):
                         tile.rotation = original_rotation  
     return valid_moves
 
-def check_if_tile_completes_monastery(game: Game, tile: Tile, x: int, y: int):
+def check_if_tile_completes_monastery(Monastery_x: int, Monastery_y: int,x: int, y: int, grid: list[list[Tile | None]]):
     """
-    Pass in Tile and coordinates it will check whether or not it completes monastery
+    Pass in Coordinates of Centre of Monastery 
+    and Tile location which is vacant where we want to place tile
+    and it will return whether or not it will be the final tile
     """
-    pass           
+    for i in range(-1,2):
+        for j in range(-1,2):
+            # If we find a tile which is empty around monastery which is not vacant tile location we also found means more than 1 vacant
+            if grid[Monastery_x+i][Monastery_y+j] is None and x != Monastery_x+i and y != Monastery_y+j:
+                return False
+    return True         
 
 def check_if_tile_completes_structure(tile: Tile, x: int, y: int, structure: StructureType, grid: list[list[Tile | None]]) -> bool:
     """
