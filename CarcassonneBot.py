@@ -29,6 +29,7 @@ class TileEncoding:
 class TileProbability:
     def __init__(self):
         # F = Field, R = Road, M = Monastery, C = City
+        # I've put the features of a tile based on how they appear if you go clockwise around the tile starting from the top left
         self.tile_map = {
             # A: Monastery with road (2x)
             TileEncoding(['F'], ['F'], ['F', 'R', 'F'], ['F'], ['M']): 2,
