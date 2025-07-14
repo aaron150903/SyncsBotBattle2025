@@ -268,9 +268,41 @@ def check_if_tile_completes_structure(tile: Tile, x: int, y: int, structure: Str
 
 def retrieve_details_of_structure(game: Game, structure: StructureType):
     """
-    Pass in Structure Details and retrieve info on where they are located, amount of meeples in structure and size
+    Return a dictionary with:
+    - locations: list of (x, y) where structure type appears
+    - meeples: count of meeples on that structure type
+    - size: number of tiles containing that structure type
     """
-    pass
+    grid = game.state.map._grid
+    height = len(grid)
+    width = len(grid[0])
+    
+    structure_locations = []
+    meeple_count = 0
+    tile_count = 0
+
+    for y in range(height):
+        for x in range(width):
+            tile = grid[y][x]
+            if tile is None:
+                continue
+
+            if structure in tile.internal_edges.values():
+                structure_locations.append((x, y))
+                tile_count += 1
+
+                if hasattr(tile, "meeples"):
+                    for meeple in tile.meeples:
+                        if meeple.structure_type == structure:
+                            meeple_count += 1
+
+    return {
+        "locations": structure_locations,
+        "meeples": meeple_count,
+        "size": tile_count,
+    }
+
+
 
 def compute_tile_score(game: Game, tile: Tile):
     """
