@@ -53,7 +53,11 @@ class GameState(GameLogic):
         self.round += 1
 
     def get_player_points(self) -> list[tuple[int, int]]:
-        return [(player.id, player.points) for player in self.players.values()]
+        return sorted(
+            [(player.id, player.points) for player in self.players.values()],
+            key=lambda x: x[1],
+            reverse=True,
+        )
 
     def get_rankings(self) -> list[int]:
         return [

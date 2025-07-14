@@ -101,6 +101,8 @@ class StateMutator:
         # Check for any complete connected componentes
         completed_components = self.state.check_any_complete(tile)
 
+        player_point_limit = -1
+
         # Check for base/regular connected components
         for edge in completed_components:
             reward = self.state._get_reward(tile, edge)
@@ -112,9 +114,7 @@ class StateMutator:
                     player.points += reward
 
                     if player.points >= POINT_LIMIT:
-                        self.commit(
-                            EventGameEndedPointLimitReached(player_id=player.id)
-                        )
+                        player_point_limit = player.id
 
             meeples_to_return = list(
                 self.state._traverse_connected_component(
@@ -143,6 +143,12 @@ class StateMutator:
             for player_id, reward, t, reward_edge in subscibed_complete._reward():
                 self.state.players[player_id].points += reward
 
+                if (
+                    self.state.players[player_id].points >= POINT_LIMIT
+                    and not player_point_limit
+                ):
+                    player_point_limit = player_id
+
                 meeple = t.internal_claims[reward_edge]
                 assert meeple is not None
 
@@ -155,6 +161,9 @@ class StateMutator:
                         placed_on=reward_edge,
                     )
                 )
+
+        if player_point_limit >= 0:
+            self.commit(EventGameEndedPointLimitReached(player_id=player_point_limit))
 
     def _commit_move_place_meeple(self, move: MovePlaceMeeple) -> None:
         """

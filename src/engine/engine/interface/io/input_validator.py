@@ -1,5 +1,8 @@
 from copy import deepcopy
 from typing import TYPE_CHECKING
+
+from helper.utils import print_map
+from lib.game.game_logic import TileModifier
 from engine.config.game_config import MAX_NUM_TILES_IN_HAND
 from lib.config.map_config import MONASTARY_IDENTIFIER, NUM_PLACEABLE_TILE_TYPES
 from lib.interface.events.moves.move_place_meeple import (
@@ -21,6 +24,12 @@ VALID_PLACEABLE_TILE_TYPES.extend(
 
 VALID_ROTATIONS = [0, 1, 2, 3]
 VALID_MEEPLE_PLACEMENTS = Tile.get_starting_tile().internal_claims.keys()
+VALID_STRUCTURE_CLAIMS = [
+    StructureType.MONASTARY,
+    StructureType.CITY,
+    StructureType.ROAD,
+    StructureType.ROAD_START,
+]
 
 if TYPE_CHECKING:
     from engine.state.game_state import GameState
@@ -55,6 +64,8 @@ class MoveValidator:
 
         # R3
         print("Validator recieved tile type", e.tile.tile_type)
+
+        print_map(self.state.map._grid, range(75, 96))
 
         neighbouring_tiles = {
             edge: Tile.get_external_tile(edge, (x, y), self.state.map._grid)
@@ -117,8 +128,8 @@ class MoveValidator:
                     Tile.get_opposite(edge)
                 ]
                 if neighboring_edge != edge_structure:
-                    print(tile.tile_type, tile.rotation)
-                    print(neighbour_tile.tile_type, neighbour_tile.rotation)
+                    # print(tile.tile_type, tile.rotation)
+                    # print(neighbour_tile.tile_type, neighbour_tile.rotation)
                     raise ValueError(
                         f"You placed a tile in an mismatched position - {edge} mismatch, your edge is {tile.internal_edges[edge]} on rotation {tile.rotation} at coordinates {e.tile.pos} != {neighbour_tile.internal_edges[Tile.get_opposite(edge)]} on rotation {neighbour_tile.rotation} at position {neighbour_tile.placed_pos}"
                     )
@@ -205,6 +216,21 @@ class MoveValidator:
                 raise ValueError(
                     "You tried placing a meeple on an unclaimable Structure - \
                     adjacent structure claimed by an opponent"
+                )
+
+            if (
+                self.state.tile_placed.internal_edges[e.placed_on]
+                not in VALID_STRUCTURE_CLAIMS
+            ):
+                raise ValueError(
+                    f"You placed a meeple on a invalid edge - Edge Strcuture is {self.state.tile_placed.internal_edges[e.placed_on]}"
+                )
+
+        if e.placed_on == MONASTARY_IDENTIFIER:
+            if TileModifier.MONASTARY not in self.state.tile_placed.modifiers:
+                raise ValueError(
+                    "You tried placing a meeple on a Monastary - \
+                    There is no Monastary on the tile "
                 )
 
     def _validate_place_meeple_pass(

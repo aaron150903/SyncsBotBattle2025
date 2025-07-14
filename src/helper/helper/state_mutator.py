@@ -124,6 +124,7 @@ class StateMutator:
             p.player_id: e.num_starting_meeples for p in e.players
         }
 
+        self.state.me.num_meeples = e.num_starting_meeples
         self.state.map.start_river_phase()
 
     def _commit_event_player_meeple_freed(self, e: EventPlayerMeepleFreed) -> None:
@@ -174,7 +175,6 @@ class StateMutator:
 
         assert tile is not None
         tile.internal_claims[e.placed_on] = Meeple(e.player_id)
-        self.state.players_meeples[e.player_id] -= 1
 
         if e.player_id == self.state.me.player_id:
             self.state.me.num_meeples -= 1

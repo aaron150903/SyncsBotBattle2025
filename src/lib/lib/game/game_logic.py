@@ -20,6 +20,11 @@ class GameLogic(SharedGameState):
             if meeple is not None:
                 players[meeple.player_id].append(meeple)
 
+        starting_tile_meeple = tile.internal_claims[edge]
+
+        if starting_tile_meeple:
+            players[starting_tile_meeple.player_id].append(starting_tile_meeple)
+
         return players
 
     def _get_claims(self, tile: "Tile", edge: str) -> list[int]:
@@ -36,6 +41,11 @@ class GameLogic(SharedGameState):
             meeple = connected_tile.internal_claims[e]
             if meeple is not None:
                 players.add(meeple.player_id)
+
+        starting_tile_meeple = tile.internal_claims[edge]
+
+        if starting_tile_meeple:
+            players.add(starting_tile_meeple.player_id)
 
         return list(players)
 

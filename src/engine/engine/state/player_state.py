@@ -32,5 +32,5 @@ class PlayerState:
             team_id=self.team_id,
             points=self.points,
             tiles=[tile._to_model() for tile in self.tiles],
-            num_meeples=len([m for m in self.meeples if m.placed is not None]),
+            num_meeples=len([m for m in self.meeples if m.placed is None]),
         )
