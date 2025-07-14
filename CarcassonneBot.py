@@ -25,6 +25,23 @@ class TileEncoding:
         self.bottom_edge = bottom_edge
         self.left_edge = left_edge
         self.center = center
+        self.rotation = 0
+
+    def rotate_clockwise(self, num: int) -> None:
+        for i in range(num):
+            (
+                self.right_edge,
+                self.bottom_edge,
+                self.left_edge,
+                self.top_edge,
+            ) = (
+                self.top_edge,
+                self.right_edge,
+                self.bottom_edge,
+                self.left_edge,
+            )
+        self.rotation += num
+        self.rotation %= 4
 
 class TileProbability:
     def __init__(self):
@@ -32,7 +49,7 @@ class TileProbability:
         # I've put the features of a tile based on how they appear if you go clockwise around the tile starting from the top left
         self.tile_map = {
             # A: Monastery with road (2x)
-            TileEncoding(['F'], ['F'], ['F', 'R', 'F'], ['F'], ['M']): 2,
+            TileEncoding(['F'], ['F'], ['R'], ['F'], ['M']): 2,
             
             # B: Monastery alone (4x)
             TileEncoding(['F'], ['F'], ['F'], ['F'], ['M']): 4,
@@ -41,7 +58,7 @@ class TileProbability:
             TileEncoding(['C'], ['C'], ['C'], ['C'], ['C']): 1,
             
             # D: City corner with road (4x) - includes start tile
-            TileEncoding(['F'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 4,
+            TileEncoding(['F'], ['R'], ['F'], ['C'], ['F']): 4,
             
             # E: City corner (5x)
             TileEncoding(['F'], ['F'], ['F'], ['C'], ['F']): 5,
@@ -56,16 +73,16 @@ class TileProbability:
             TileEncoding(['C'], ['C'], ['F'], ['C'], ['C']): 3,
             
             # I: City on three sides with road (2x)
-            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['C'], ['C']): 2,
+            TileEncoding(['C'], ['C'], ['R'], ['C'], ['C']): 2,
             
             # J: City corner with road on adjacent side (3x)
-            TileEncoding(['C'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 3,
+            TileEncoding(['C'], ['R'], ['F'], ['C'], ['F']): 3,
             
             # K: City corner with road on opposite side (3x)
-            TileEncoding(['C'], ['F'], ['F', 'R', 'F'], ['C'], ['F']): 3,
+            TileEncoding(['C'], ['F'], ['R'], ['C'], ['F']): 3,
             
             # L: City corner with road on far side (3x)
-            TileEncoding(['C'], ['F'], ['F'], ['F', 'R', 'F'], ['F']): 3,
+            TileEncoding(['C'], ['F'], ['F'], ['R'], ['F']): 3,
             
             # M: City with pennant on diagonal (2x)
             TileEncoding(['C'], ['F'], ['F'], ['C'], ['F']): 2,
@@ -74,10 +91,10 @@ class TileProbability:
             TileEncoding(['C'], ['C'], ['F'], ['C'], ['C']): 3,
             
             # O: City with pennant on diagonal plus road (2x)
-            TileEncoding(['C'], ['F', 'R', 'F'], ['F'], ['C'], ['F']): 2,
+            TileEncoding(['C'], ['R'], ['F'], ['C'], ['F']): 2,
             
             # P: City with pennant on three sides plus road (3x)
-            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['C'], ['C']): 3,
+            TileEncoding(['C'], ['C'], ['R'], ['C'], ['C']): 3,
             
             # Q: City with pennant on two adjacent sides (1x)
             TileEncoding(['C'], ['C'], ['F'], ['F'], ['C']): 1,
@@ -86,22 +103,22 @@ class TileProbability:
             TileEncoding(['C'], ['C'], ['F'], ['F'], ['C']): 3,
             
             # S: City with pennant on two adjacent sides plus road (2x)
-            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['F'], ['C']): 2,
+            TileEncoding(['C'], ['C'], ['R'], ['F'], ['C']): 2,
             
             # T: City with pennant on two adjacent sides plus road (1x)
-            TileEncoding(['C'], ['C'], ['F', 'R', 'F'], ['F'], ['C']): 1,
+            TileEncoding(['C'], ['C'], ['R'], ['F'], ['C']): 1,
             
             # U: Straight road (8x)
-            TileEncoding(['F', 'R', 'F'], ['F'], ['F', 'R', 'F'], ['F'], ['F']): 8,
+            TileEncoding(['R'], ['F'], ['R'], ['F'], ['F']): 8,
             
             # V: Curved road (9x)
-            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F'], ['F'], ['F']): 9,
+            TileEncoding(['R'], ['R'], ['F'], ['F'], ['F']): 9,
             
             # W: T-junction road (4x)
-            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F'], ['F', 'R', 'F'], ['F']): 4,
+            TileEncoding(['R'], ['R'], ['F'], ['R'], ['F']): 4,
     
             # X: 4-way intersection (1x)
-            TileEncoding(['F', 'R', 'F'], ['F', 'R', 'F'], ['F', 'R', 'F'], ['F', 'R', 'F'], ['F']): 1,
+            TileEncoding(['R'], ['R'], ['R'], ['R'], ['F']): 1,
         }
         self.total_tiles = 72
 

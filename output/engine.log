@@ -1,0 +1,9 @@
+Intialising game engine!
+New round 0
+Validator recieved tile type R9
+Validator recieved tile type R4
+Validator recieved tile type R3
+Validator recieved tile type R1
+New round 1
+Validator recieved tile type R7
+[engine]: match complete, outcome was {result_type='PLAYER_BANNED' ban_type='INVALID_MOVE' player=2 reason='You placed a tile that will lead to a U-Turn in the river.'}
