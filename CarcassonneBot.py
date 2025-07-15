@@ -227,17 +227,77 @@ def update_tile_distribution(used_tile: Tile):
             break
     remaining_tiles.remove(tile)
 
-def compute_tile_score(game: Game, tile: Tile):
-    """
-    Use equation to compute the score of a tile
-    """
-    pass
+def get_value_of_completed_structure(tile: Tile, structure_type: StructureType, x, y):
+    '''Given a tile and the type of structure it completes, return the total value of that structure
+    '''
+    return 1
+
+def get_structure_claimed(game: Game, tile: Tile, structure_type: StructureType, x: int, y: int, rot: int):
+    '''Returns if we already own this structure or not. Even if we don't have a meeple on this current tile
+    we may still already own the structure. Now that theres no stealing based on number of meeples in the structure, 
+    we don't need to add more meeples on a structure we already own.'''
+    return True
+
+def get_value_of_incomplete_structure(game: Game, tile: Tile, structure_type: StructureType, x: int, y: int):
+    '''Returns the potential value of an incomplete structure by finding the current value of the structure if scoring
+    was to be done now and adds some extra benefit which we'd get if we completed this structure and had a meeple on it. This will be scaled
+    by the probability of completing the structure'''
+    return 5
+
+def compute_base_score(game: Game, tile: Tile, x: int, y: int, rot: int):
+    '''Gets the score of this tile if we don't put a meeple on it'''
+    total_base_score = 0
+    possible_completed_structures = [tile.top_edge, tile.right_edge, tile.bottom_edge, tile.left_edge]
+    for possible_completed_structure in possible_completed_structures:
+        if (get_structure_claimed(tile, possible_completed_structure, x, y)) and check_if_tile_completes_structure(tile, x, y, possible_completed_structure, game.state.map._grid): 
+            total_base_score += get_value_of_completed_structure(tile, possible_completed_structure, x, y)
+    return total_base_score
+
+def compute_incremental_score(game: Game, tile: Tile, x: int, y: int, rot: int):
+    '''Gets the additional value of this tile when you place a meeple on one of the tile's structures.
+    Returns the score you get by placing a meeple on the most valuable asset on the tile which is determined
+    by the value of the asset and probability of completing that asset. Also returns where to place the meeple.
+    '''
+    possible_meeple_placements = [tile.top_edge, tile.right_edge, tile.bottom_edge, tile.left_edge]
+    best_meeple_placement_score = 0
+    best_meeple_placement = None
+    for meeple_placement in possible_meeple_placements:
+        if (get_structure_claimed(game, tile, meeple_placement, x, y)): continue
+        #we'll probably need to change how we are calculating the probabilities. 
+        expected_benefits = (get_value_of_incomplete_structure(game, tile, meeple_placement, x, y) * calculate_probability())
+        if expected_benefits > best_meeple_placement_score:
+            best_meeple_placement = meeple_placement
+            best_meeple_placement_score = expected_benefits
+    return (best_meeple_placement_score, best_meeple_placement)
+
+
+def compute_tile_score(game: Game, tile: Tile, x: int, y: int, rot: int):
+    '''Returns total score of a tile'''
+    base_score = compute_base_score(game, tile, x, y, rot)
+    incremental_score_tuple = compute_incremental_score(game, tile, x, y, rot)
+    incremental_score, meeple_placement = incremental_score_tuple[0], incremental_score_tuple[1]
+    if incremental_score <= 0:
+        #theres no gain from adding a meeple
+        meeple_placement = None
+    return (base_score+incremental_score, meeple_placement)
+
 
 def get_best_tile_placement(game: Game, tiles: List[Tile]):
     """
     Pass in all tiles we can validly place and return the best tile and placement based on equation computation
     """
-    pass
+    valid_placements = get_valid_moves(game)
+    best_tile_placement = None
+    best_tile_placement_score = float('-inf')
+    best_meeple_placement = None
+    for valid_placement in valid_placements:
+        curr_placement_tuple = compute_tile_score(game, valid_placement[1], valid_placement[2], valid_placement[3], valid_placement[4])
+        tile_placement_score, meeple_placement = curr_placement_tuple[0], curr_placement_tuple[1]
+        if tile_placement_score > best_tile_placement_score:
+            best_tile_placement_score = tile_placement_score
+            best_meeple_placement = meeple_placement
+            best_tile_placement = valid_placement[1]
+    return (best_tile_placement, best_meeple_placement)
 
 def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) -> MovePlaceTile:
     pass
