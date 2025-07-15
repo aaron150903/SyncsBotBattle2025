@@ -1,1 +1,1 @@
-{"result_type":"PLAYER_BANNED","ban_type":"INVALID_MOVE","player":2,"reason":"You placed a tile that will lead to a U-Turn in the river."}
+{"result_type":"PLAYER_BANNED","ban_type":"TIMEOUT","player":0,"reason":"You didn't open 'to_engine' for writing or 'from_engine.pipe' for reading in time."}

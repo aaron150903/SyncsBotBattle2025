@@ -11,136 +11,17 @@ from lib.interface.queries.query_place_tile import QueryPlaceTile
 from lib.interface.queries.query_place_meeple import QueryPlaceMeeple
 from lib.interface.events.moves.typing import MoveType
 from lib.models.tile_model import TileModel
+from lib.interact.tile import Tile
+from lib.interact.tile import create_base_tiles
 from typing import List
 import copy
+
+
+remaining_tiles = create_base_tiles()
 
 class BotState:
     def __init__(self) -> None:
         self.last_tile: TileModel | None = None
-
-class TileEncoding:
-    def __init__(self, top: str, right: str, bottom: str, left: str, center: str):
-        self.top = top
-        self.right = right
-        self.bottom = bottom
-        self.left = left
-        self.center = center
-        self.rotation = 0
-
-    def rotate_clockwise(self, num: int) -> None:
-        for i in range(num):
-            (
-                self.right,
-                self.bottom,
-                self.left,
-                self.top,
-            ) = (
-                self.top,
-                self.right,
-                self.bottom,
-                self.left,
-            )
-        self.rotation += num
-        self.rotation %= 4
-
-    def __eq__(self, other) -> bool:
-        for i in range(1,5):
-            self.rotate_clockwise(i)
-            if self.top==other.top and self.right==other.right and self.bottom==other.bottom and self.left==other.left:
-                return True
-        return False
-
-class TileProbability:
-    def __init__(self):
-        # F = Field, R = Road, M = Monastery, C = City
-        # I've put the features of a tile based on how they appear if you go clockwise around the tile starting from the top left
-        self.tile_map = {
-            # A: Monastery with road (2x)
-            TileEncoding('F', 'F', 'R', 'F', 'M'): 2,
-            
-            # B: Monastery alone (4x)
-            TileEncoding('F', 'F', 'F', 'F', 'M'): 4,
-            
-            # C: Large city with pennant (1x)
-            TileEncoding('C', 'C', 'C', 'C', 'C'): 1,
-            
-            # D: City corner with road (4x) - includes start tile
-            TileEncoding('F', 'R', 'F', 'C', 'F'): 4,
-            
-            # E: City corner (5x)
-            TileEncoding('F', 'F', 'F', 'C', 'F'): 5,
-            
-            # F: City on two adjacent sides (2x)
-            TileEncoding('C', 'C', 'F', 'F', 'F'): 2,
-            
-            # G: City on opposite sides (1x)
-            TileEncoding('C', 'F', 'C', 'F', 'C'): 1,
-            
-            # H: City on three sides (3x)
-            TileEncoding('C', 'C', 'F', 'C', 'C'): 3,
-            
-            # I: City on three sides with road (2x)
-            TileEncoding('C', 'C', 'R', 'C', 'C'): 2,
-            
-            # J: City corner with road on adjacent side (3x)
-            TileEncoding('C', 'R', 'F', 'C', 'F'): 3,
-            
-            # K: City corner with road on opposite side (3x)
-            TileEncoding('C', 'F', 'R', 'C', 'F'): 3,
-            
-            # L: City corner with road on far side (3x)
-            TileEncoding('C', 'F', 'F', 'R', 'F'): 3,
-            
-            # M: City with pennant on diagonal (2x)
-            TileEncoding('C', 'F', 'F', 'C', 'F'): 2,
-            
-            # N: City with pennant on three sides (3x)
-            TileEncoding('C', 'C', 'F', 'C', 'C'): 3,
-            
-            # O: City with pennant on diagonal plus road (2x)
-            TileEncoding('C', 'R', 'F', 'C', 'F'): 2,
-            
-            # P: City with pennant on three sides plus road (3x)
-            TileEncoding('C', 'C', 'R', 'C', 'C'): 3,
-            
-            # Q: City with pennant on two adjacent sides (1x)
-            TileEncoding('C', 'C', 'F', 'F', 'C'): 1,
-            
-            # R: City with pennant on two adjacent sides (3x)
-            TileEncoding('C', 'C', 'F', 'F', 'C'): 3,
-            
-            # S: City with pennant on two adjacent sides plus road (2x)
-            TileEncoding('C', 'C', 'R', 'F', 'C'): 2,
-            
-            # T: City with pennant on two adjacent sides plus road (1x)
-            TileEncoding('C', 'C', 'R', 'F', 'C'): 1,
-            
-            # U: Straight road (8x)
-            TileEncoding('R', 'F', 'R', 'F', 'F'): 8,
-            
-            # V: Curved road (9x)
-            TileEncoding('R', 'R', 'F', 'F', 'F'): 9,
-            
-            # W: T-junction road (4x)
-            TileEncoding('R', 'R', 'F', 'R', 'F'): 4,
-    
-            # X: 4-way intersection (1x)
-            TileEncoding('R', 'R', 'R', 'R', 'F'): 1,
-        }
-        self.total_tiles = 72
-
-    def calculate_probability(self, required_tile: TileEncoding):
-        matching_tile_amount = 0
-        for tile in self.tile_map:
-            matching_tile_amount = self.tile_map[tile] if (tile.top_edge == required_tile.top_edge and tile.right_edge == required_tile.right_edge and tile.bottom_edge == required_tile.bottom_edge and tile.left_edge == required_tile.left_edge and tile.center == required_tile.center) else 0
-        return (matching_tile_amount / self.total_tiles)
-    
-    def update_tile_distribution(self, used_tile: TileEncoding):
-        matching_tile = None
-        for tile in self.tile_map:
-            matching_tile = tile if (used_tile.top_edge == matching_tile.top_edge and used_tile.right_edge == tile.right_edge and used_tile.bottom_edge == tile.bottom_edge and used_tile.left_edge == tile.bottom_edge and used_tile.center == tile.center) else None
-        self.tile_map[matching_tile] = self.tile_map[matching_tile] - 1 if matching_tile != None else self.tile_map[matching_tile]
-
 
 def main() -> None:
     game = Game()
@@ -326,7 +207,25 @@ def retrieve_details_of_structure(game: Game, structure: StructureType):
         "size": tile_count,
     }
 
+def calculate_probability(top: StructureType, right: StructureType, left: StructureType, bottom: StructureType):
+    matching_tile_amount = 0
+    for tile in remaining_tiles:
+        for rotation in range(1,5):
+            tile.rotate_clockwise(rotation)
+            edges = tile.internal_edges
+            if ((top==None or edges["top_edge"]==top) and (right==None or edges["right_edge"]==right) and (left==None or edges["left_edge"]==left) and (bottom==None or edges["bottom_edge"]==bottom)):
+                matching_tile_amount+=1
+                break
+    return (matching_tile_amount / remaining_tiles)
 
+def update_tile_distribution(used_tile: Tile):
+    id = used_tile.tile_type
+    tile = None
+    for t in remaining_tiles:
+        if t.tile_type==id:
+            tile = t
+            break
+    remaining_tiles.remove(tile)
 
 def compute_tile_score(game: Game, tile: Tile):
     """
