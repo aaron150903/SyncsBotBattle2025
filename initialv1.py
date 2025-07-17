@@ -53,7 +53,7 @@ def main():
 
                 case QueryPlaceMeeple() as q:
                     print("meeple")
-                    return handle_place_meeple(game, bot_state, q)
+                    return handle_place_meeple_advanced(game, bot_state, q)
                 case _:
                     assert False
 
