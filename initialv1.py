@@ -1,5 +1,5 @@
 from helper.game import Game
-from lib.interact.tile import Tile
+from lib.interact.tile import Tile, TileModifier
 from lib.interface.events.moves.move_place_tile import MovePlaceTile
 from lib.interface.events.moves.move_place_meeple import (
     MovePlaceMeeple,
@@ -12,6 +12,9 @@ from lib.interface.events.moves.typing import MoveType
 from lib.config.map_config import MAX_MAP_LENGTH
 from lib.config.map_config import MONASTARY_IDENTIFIER
 from lib.interact.structure import StructureType
+
+from collections import deque
+from typing import Callable, Iterator
 
 
 class BotState:
@@ -143,6 +146,106 @@ def is_river_tile(tile) -> bool:
     return any(edge == StructureType.RIVER for edge in tile.internal_edges.values())
 
 
+def check_if_tile_completes_structure(game: Game, tile: Tile, x: int, y: int) -> bool:
+    """
+    Simulates placing a tile at (x, y) on a copied grid and checks if it would complete any connected structure.
+    Does not check Monastery (Only roads and cities)
+    """
+    new_grid = [row[:] for row in game.state.map._grid]
+    tile.placed_pos = (x, y)
+    new_grid[y][x] = tile
+
+    edges = tile.get_external_tiles(new_grid).keys()
+
+    for edge in edges:
+        component = list(transverse_connected_component(tile, edge, new_grid))
+        for t, e in component:
+            if t.placed_pos is None:
+                return False
+            if t.get_external_tile(e, t.placed_pos, new_grid) is None:
+                return False
+        if component:
+            return True  # at least one structure is completed
+    return False
+
+
+def transverse_connected_component(
+    start_tile: "Tile",
+    edge: str,
+    grid,
+    yield_cond: Callable[[Tile, str], bool] = lambda _1, _2: True,
+    modify: Callable[[Tile, str], None] = lambda _1, _2: None,
+) -> Iterator[tuple["Tile", str]]:
+    visited = set()
+
+    if edge not in start_tile.internal_edges:
+        return
+
+    structure_type = start_tile.internal_edges[edge]
+    structure_bridge = TileModifier.get_bridge_modifier(structure_type)
+    queue = deque([(start_tile, edge)])
+
+    while queue:
+        tile, edge = queue.popleft()
+        if (tile, edge) in visited:
+            continue
+
+        visited.add((tile, edge))
+        modify(tile, edge)
+
+        if yield_cond(tile, edge):
+            yield tile, edge
+
+        connected_internal_edges = [edge]
+
+        for adjacent_edge in Tile.adjacent_edges(edge):
+            if tile.internal_edges.get(adjacent_edge) == structure_type:
+                if not (
+                    TileModifier.BROKEN_CITY in tile.modifiers
+                    and structure_type == StructureType.CITY
+                ):
+                    connected_internal_edges.append(adjacent_edge)
+
+                    for adjacent_edge2 in Tile.adjacent_edges(adjacent_edge):
+                        if (
+                            tile.internal_edges.get(adjacent_edge2) == structure_type
+                            and adjacent_edge2 not in connected_internal_edges
+                        ):
+                            connected_internal_edges.append(adjacent_edge2)
+
+        if (
+            len(connected_internal_edges) == 1
+            and structure_bridge
+            and structure_bridge in tile.modifiers
+        ):
+            if StructureType.is_compatible(
+                structure_type,
+                tile.internal_edges.get(Tile.get_opposite(edge))
+            ):
+                connected_internal_edges.append(Tile.get_opposite(edge))
+
+        if structure_type == StructureType.ROAD_START:
+            structure_type = StructureType.ROAD
+
+        for cid in connected_internal_edges:
+            if tile.placed_pos is None:
+                continue
+
+            neighbouring_tile = Tile.get_external_tile(cid, tile.placed_pos, grid)
+            if neighbouring_tile:
+                neighbouring_tile_edge = Tile.get_opposite(cid)
+                neighbouring_structure_type = neighbouring_tile.internal_edges.get(neighbouring_tile_edge)
+
+                if (
+                    structure_type == StructureType.ROAD
+                    and neighbouring_structure_type == StructureType.ROAD_START
+                ):
+                    continue
+
+                if (neighbouring_tile, neighbouring_tile_edge) not in visited:
+                    queue.append((neighbouring_tile, neighbouring_tile_edge))
+
+
 def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) -> MovePlaceTile:
     """
     Handles placing a tile from hand by checking river phase and attempting valid moves.
@@ -150,34 +253,61 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
     """
 
     grid = game.state.map._grid
+    height = len(grid)
+    width = len(grid[0]) if height > 0 else 0
     latest_tile = game.state.map.placed_tiles[-1]
     latest_pos = latest_tile.placed_pos
     assert latest_pos
 
-    directions = {
-        (1, 0): "left_edge",
-        (0, 1): "top_edge",
-        (-1, 0): "right_edge",
-        (0, -1): "bottom_edge",
-    }
+    directions = {(1, 0): "left_edge", (0, 1): "top_edge", (-1, 0): "right_edge", (0, -1): "bottom_edge"}
 
-    for tile_hand_index, tile_in_hand in enumerate(game.state.my_tiles):
-        is_river = is_river_tile(tile_in_hand)
+    # Check if we are in river stage:
+    is_river = False
+    for tile_index, tile in enumerate(game.state.my_tiles):
+        if is_river_tile(tile):
+            is_river = True
+            break
 
-        for (dx, dy) in directions.keys():
-            tx, ty = latest_pos[0] + dx, latest_pos[1] + dy
+    # Determine valid locations to potentially place tiles
+    candidates = set()
+    for y in range(height):
+        for x in range(width):
+            if grid[y][x] is not None:
+                for dx, dy in directions:
+                    nx, ny = x + dx, y + dy
+                    if (0 <= nx < width and 0 <= ny < height and grid[ny][nx] is None):
+                        candidates.add((nx, ny))
 
-            for rotation in range(4):
-                if simulate_validate_place_tile(game, tile_in_hand, rotation, tx, ty):
-                    tile_in_hand.rotate_clockwise(rotation)
-                    bot_state.last_tile = tile_in_hand
-                    bot_state.last_tile.placed_pos = (tx, ty)
-                    return game.move_place_tile(query, tile_in_hand._to_model(), tile_hand_index)
-
-            tile_in_hand.rotate_clockwise(4)  # Reset tile to original orientation
-
+    for tile_index, tile in enumerate(game.state.my_tiles):
+        if is_river:
+            print("In river stage", flush=True)
+            for (dx, dy) in directions.keys():
+                tx, ty = latest_pos[0] + dx, latest_pos[1] + dy
+                for rotation in range(4):
+                    if simulate_validate_place_tile(game, tile, rotation, tx, ty):
+                        tile.rotate_clockwise(rotation)
+                        tile.placed_pos = (tx, ty)
+                        bot_state.last_tile = tile
+                        return game.move_place_tile(query, tile._to_model(), tile_index)
+                tile.rotate_clockwise(4)  # Reset tile
+        
+        else:
+            print("In normal stage", flush=True)
+            for (x, y) in candidates:
+                for rotation in range(4):
+                    if simulate_validate_place_tile(game, tile, rotation, x, y):
+                        tile.rotate_clockwise(rotation)
+                        if check_if_tile_completes_structure(game, tile, x, y):
+                            print('Structure Complete!',flush=True)
+                            tile.placed_pos = (x, y)
+                            bot_state.last_tile = tile
+                            return game.move_place_tile(query, tile._to_model(), tile_index)
+                        print('Structure Incomplete', flush=True)
+                tile.rotate_clockwise(4)  # Reset rotation
+    
     print("Could not place tile with strategy, using brute force...", flush=True)
     return brute_force_tile(game, bot_state, query)
+
 
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState):
     structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.ROAD_START: 2, StructureType.GRASS: 1, StructureType.RIVER: 0}
@@ -193,57 +323,52 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
     tile_model = bot_state.last_tile
     bot_state.last_tile = None
 
+    print(f"Available structures: {structures}")  # Debug print
+    
     if structures:
         structure_scores = []
         
+        x, y = tile_model.placed_pos
+        placed_tile = game.state.map._grid[y][x]
+        
         for edge, structure in structures.items():
-            if game.state._get_claims(tile_model, edge) or game.state._check_completed_component(tile_model,edge):
+            # Use the placed tile from the map for claims checking
+            is_claimed = game.state._get_claims(placed_tile, edge)
+            is_completed = game.state._check_completed_component(placed_tile, edge)
+            
+            print(f"Edge: {edge}, Structure: {structure}, Claimed: {is_claimed}, Completed: {is_completed}")
+            
+            if is_claimed or is_completed:
+                print(f"Skipping {edge} - claimed: {is_claimed}, completed: {is_completed}")
                 continue
             else:
                 score = evaluate_meeple_placement(structure, bot_state)
                 structure_scores.append((score, edge, structure))
+                print(f"Added to consideration: Edge={edge}, Structure={structure}, Score={score}")
+        
+        print(f"Final structure_scores: {structure_scores}")
+        
         if not structure_scores:
-            return game.move_place_meeple_pass(query) 
+            print("No valid structures found, passing")
+            return game.move_place_meeple_pass(query)
+            
         best_meeple_placement = max(structure_scores, key=lambda x: x[0])
         best_score, best_edge, best_structure = best_meeple_placement[0], best_meeple_placement[1], best_meeple_placement[2]
        
+        print(f"Best placement: Edge={best_edge}, Structure={best_structure}, Score={best_score}")
+        
         if (bot_state.strat_pref == 'A' and best_score > 1):
-            # Update the meeples placed
             bot_state.meeples_placed += 1
             return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
         elif best_score > 2:
-            # Update the meeples placed
             bot_state.meeples_placed += 1
             return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
         else:
+            print(f"Score {best_score} not high enough, passing")
             return game.move_place_meeple_pass(query)
-    return game.move_place_meeple_pass(query)
-
-def handle_place_meeple(
-    game: Game, bot_state: BotState, query: QueryPlaceMeeple
-) -> MovePlaceMeeple | MovePlaceMeeplePass:
-    """
-    Attempts to place a meeple on the most recently placed tile.
-    Falls back to passing if no valid placements are found.
-    """
-    # Pass placing a meeple if there is no tile placed or we have exceeded limit
-    if bot_state.last_tile is None or bot_state.meeples_placed == 7:
-        return game.move_place_meeple_pass(query)
-    
-    structures = game.state.get_placeable_structures(bot_state.last_tile._to_model())
-    tile_model = bot_state.last_tile
-    bot_state.last_tile = None
-
-    if structures:
-        for edge, _ in structures.items():
-            if game.state._get_claims(tile_model, edge) or game.state._check_completed_component(tile_model,edge):
-                continue
-            else:
-                # Update meeples palced
-                bot_state.meeples_placed += 1
-                return game.move_place_meeple(query, tile_model._to_model(), placed_on=edge)
             
     return game.move_place_meeple_pass(query)
+
 
 def brute_force_tile(
     game: Game, bot_state: BotState, query: QueryPlaceTile
