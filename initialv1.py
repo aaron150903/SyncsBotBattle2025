@@ -32,9 +32,11 @@ class BotState:
 
         if opponent_points and max(opponent_points) - curr_points > 10:
             self.strat_pref = 'A'
+
         elif max(opponent_points) == curr_points:
             #only need to be defensive if we're winning, otherwise choose balanced.
             self.strat_pref = 'D'
+
         else:
             self.strat_pref = 'B'
 
@@ -178,7 +180,7 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
     return brute_force_tile(game, bot_state, query)
 
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState):
-    structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.FIELD: 1}
+    structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.GRASS: 1}
     strategy_bonus = 2 if bot_state.strat_pref == 'A' else 0
     return (structure_points[structure_type] + strategy_bonus)
 
@@ -192,18 +194,25 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
 
     if structures:
         structure_scores = []
+        
         for edge, structure in structures.items():
             if game.state._get_claims(tile_model, edge) or game.state._check_completed_component(tile_model,edge):
                 continue
             else:
                 score = evaluate_meeple_placement(structure, bot_state)
                 structure_scores.append((score, edge, structure))
+        
         best_meeple_placement = max(structure_scores, key=lambda x: x[0])
         best_score, best_edge, best_structure = best_meeple_placement[0], best_meeple_placement[1], best_meeple_placement[2]
+       
         if (bot_state.strat_pref == 'A' and best_score > 1):
-            return game.move_place_meeple(query, tile_model, best_edge)
+            # Update the meeples placed
+            bot_state.meeples_placed += 1
+            return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
         elif best_score > 2:
-            return game.move_place_meeple(query, tile_model, best_edge)
+            # Update the meeples placed
+            bot_state.meeples_placed += 1
+            return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
         else:
             return game.move_place_meeple_pass(query)
     return game.move_place_meeple_pass(query)
@@ -233,7 +242,6 @@ def handle_place_meeple(
                 return game.move_place_meeple(query, tile_model._to_model(), placed_on=edge)
             
     return game.move_place_meeple_pass(query)
-
 
 def brute_force_tile(
     game: Game, bot_state: BotState, query: QueryPlaceTile
