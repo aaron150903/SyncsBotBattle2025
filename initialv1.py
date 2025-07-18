@@ -180,9 +180,10 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
     return brute_force_tile(game, bot_state, query)
 
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState):
-    structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.GRASS: 1}
+    structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.ROAD_START: 2, StructureType.GRASS: 1, StructureType.RIVER: 0}
     strategy_bonus = 2 if bot_state.strat_pref == 'A' else 0
-    return (structure_points[structure_type] + strategy_bonus)
+    total_points = (structure_points[structure_type] if structure_type in structure_points else 0) + strategy_bonus
+    return (total_points)
 
 def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPlaceMeeple):
     if bot_state.last_tile is None or bot_state.meeples_placed == 7:
