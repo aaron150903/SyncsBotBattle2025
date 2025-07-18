@@ -1,2 +1,3 @@
 Intialising game engine!
-[engine]: match complete, outcome was {result_type='PLAYER_BANNED' ban_type='TIMEOUT' player=0 reason="You didn't open 'to_engine' for writing or 'from_engine.pipe' for reading in time."}
+New round 0
+[engine]: match complete, outcome was {result_type='PLAYER_BANNED' ban_type='TIMEOUT' player=0 reason='You took too long to respond.'}

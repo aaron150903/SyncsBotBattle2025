@@ -1,1 +1,1 @@
-[]
+[{"event_type":"event_game_started","turn_order":[0,1,3,2],"players":[{"player_id":0,"team_id":0,"points":0,"tiles":[],"num_meeples":7},{"player_id":1,"team_id":1,"points":0,"tiles":[],"num_meeples":7},{"player_id":2,"team_id":2,"points":0,"tiles":[],"num_meeples":7},{"player_id":3,"team_id":3,"points":0,"tiles":[],"num_meeples":7}]},{"event_type":"event_starting_tile_placed","tile_placed":{"tile_type":"RS","pos":[85,85],"rotation":0}}]

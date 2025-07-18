@@ -1,1 +1,1 @@
-{"result_type":"PLAYER_BANNED","ban_type":"TIMEOUT","player":0,"reason":"You didn't open 'to_engine' for writing or 'from_engine.pipe' for reading in time."}
+{"result_type":"PLAYER_BANNED","ban_type":"TIMEOUT","player":0,"reason":"You took too long to respond."}
