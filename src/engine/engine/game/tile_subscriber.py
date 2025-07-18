@@ -5,6 +5,8 @@ from lib.config.map_config import MAX_MAP_LENGTH
 from abc import ABC, abstractmethod
 from typing import Iterator, final
 
+MONASTARY_COUNT = 9
+
 
 class TileSubsciber(ABC):
     """
@@ -46,7 +48,7 @@ class MonastaryNeighbourSubsciber(TileSubsciber):
         if tile not in self.filled:
             self.filled.add(tile)
 
-        if len(self.filled) >= 8:
+        if len(self.filled) >= MONASTARY_COUNT:
             return True
 
         return False
@@ -72,7 +74,7 @@ class MonastaryNeighbourSubsciber(TileSubsciber):
             (x + i, y + j)
             for i in range(-1, 2)
             for j in range(-1, 2)
-            if not (i == j == 0)
+            # if not (i == j == 0)
         ]
 
     @final

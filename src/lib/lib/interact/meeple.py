@@ -20,6 +20,7 @@ class Meeple:
         self.placed_edge: str = ""
 
     def _place_meeple(self, tile: "Tile", edge: str) -> None:
+        assert self.placed_edge == ""
         self.placed = tile
         self.placed_edge = edge
         tile.internal_claims[edge] = self
@@ -28,3 +29,4 @@ class Meeple:
         assert self.placed
         self.placed.internal_claims[self.placed_edge] = None
         self.placed = None
+        self.placed_edge = ""

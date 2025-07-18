@@ -1,4 +1,4 @@
-from lib.interact.tile import Tile
+from lib.interact.tile import StructureType, Tile
 from lib.interface.queries.query_place_tile import QueryPlaceTile
 from lib.interface.queries.query_place_meeple import QueryPlaceMeeple
 from lib.interface.queries.typing import QueryType
@@ -97,13 +97,18 @@ class Game:
                 has_any_neighbour = True
                 # print(tile.internal_edges[edge], edge, tile.rotation, tile.tile_type)
                 # print(neighbour_tile.internal_edges[edge_opposite[edge]])
-                if (
-                    tile.internal_edges[edge]
-                    != neighbour_tile.internal_edges[edge_opposite[edge]]
+                if not StructureType.is_compatible(
+                    tile.internal_edges[edge],
+                    neighbour_tile.internal_edges[edge_opposite[edge]],
                 ):
                     print("Edge Missmatch")
                     break  # mismatch, try next rotation
-
+                #
+                if tile.internal_edges[edge] == StructureType.RIVER:
+                    river_check = self.state.map.river_validation(tile, x, y)
+                    if river_check != "pass":
+                        print(river_check)
+                        break
             else:
                 if has_any_neighbour:
                     print("Returning True")
