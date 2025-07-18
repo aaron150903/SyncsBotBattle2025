@@ -202,7 +202,8 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
             else:
                 score = evaluate_meeple_placement(structure, bot_state)
                 structure_scores.append((score, edge, structure))
-        
+        if not structure_scores:
+            return game.move_place_meeple_pass(query) 
         best_meeple_placement = max(structure_scores, key=lambda x: x[0])
         best_score, best_edge, best_structure = best_meeple_placement[0], best_meeple_placement[1], best_meeple_placement[2]
        
