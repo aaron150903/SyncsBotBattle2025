@@ -14,8 +14,10 @@ from lib.config.map_config import MONASTARY_IDENTIFIER
 from lib.interact.structure import StructureType
 
 from collections import deque
+from typing import Set, Tuple
 from typing import Callable, Iterator
 from copy import deepcopy
+import math
 
 
 class BotState:
@@ -25,6 +27,7 @@ class BotState:
         self.last_tile: Tile | None = None
         self.meeples_placed: int = 0
         self.strat_pref = 'B'
+        self.monastary_points = []
     
     def update_strat_pref(self, game_state):
         curr_points = game_state.points
@@ -43,6 +46,13 @@ class BotState:
 
         else:
             self.strat_pref = 'B'
+
+    def add_monastary(self,x1: int, y1: int):
+        """
+        Method will update points on grid where we have monastary (it will be centre point)
+        """
+        self.monastary_points.append((x1,y1))
+        print(self.monastary_points, flush=True)
 
 def main():
     game = Game()
@@ -146,129 +156,186 @@ def is_river_tile(tile) -> bool:
     return any(edge == StructureType.RIVER for edge in tile.internal_edges.values())
 
 
-def check_if_tile_completes_structure(game: Game, tile: Tile, x: int, y: int) -> bool:
-    """
-    Simulates placing a tile at (x, y) on a copied grid and checks if it would complete any connected structure.
-    Does not check Monastery (Only roads and cities)
-    """
-    new_grid = [row[:] for row in game.state.map._grid]
-    tile.placed_pos = (x, y)
-    new_grid[y][x] = tile
-
-    edges = tile.get_external_tiles(new_grid).keys()
-
-    for edge in edges:
-        component = list(transverse_connected_component(tile, edge, new_grid))
-        for t, e in component:
-            if t.placed_pos is None:
-                return 0
-            if t.get_external_tile(e, t.placed_pos, new_grid) is None:
-                return 0
-        if component:
-            return 2*len(component)  # at least one structure is completed
-    return 0
-
-def transverse_connected_component(
+def analyze_structure_from_edge(
     start_tile: "Tile",
-    edge: str,
+    start_edge: str,
     grid,
-    yield_cond: Callable[[Tile, str], bool] = lambda _1, _2: True,
-    modify: Callable[[Tile, str], None] = lambda _1, _2: None,
-) -> Iterator[tuple["Tile", str]]:
-    visited = set()
+) -> tuple["StructureType", Set[tuple["Tile", str]], bool, Set["Tile"]]:
+    """
+    Method is based on logic in transverse connected component and method will take in edge return the 
+    structure, all tiles in the structure and whether its complete or not.
+    """
+    # Track all visited tiles
+    visited: Set[tuple["Tile", str]] = set()
+    queue = deque([(start_tile, start_edge)])
 
-    if edge not in start_tile.internal_edges:
-        return
-
-    structure_type = start_tile.internal_edges[edge]
+    # Tile has no structure
+    if start_edge not in start_tile.internal_edges:
+        return None, set(), True, 0  
+    
+    # Get the structure we will be looking at as each tile has 4 edges with potential structure
+    structure_type = start_tile.internal_edges[start_edge]
     structure_bridge = TileModifier.get_bridge_modifier(structure_type)
-    queue = deque([(start_tile, edge)])
 
+    # Have a set for getting the connected components and one for unique tiles in structure so we can capture size
+    connected_parts: Set[tuple["Tile", str]] = set()
+    unique_tiles: Set["Tile"] = set()
+    is_complete = True
+
+    # Begin BFS
     while queue:
         tile, edge = queue.popleft()
         if (tile, edge) in visited:
             continue
 
+        # Update visited as we already went through it
         visited.add((tile, edge))
-        modify(tile, edge)
+        connected_parts.add((tile, edge))
+        unique_tiles.add(tile)
 
-        if yield_cond(tile, edge):
-            yield tile, edge
+        internal_edges = {edge}
 
-        connected_internal_edges = [edge]
+        # Find all same-type internal edges on this tile which are the same as structure
+        for adj_edge in Tile.adjacent_edges(edge):
+            if tile.internal_edges.get(adj_edge) == structure_type:
+                if not (TileModifier.BROKEN_CITY in tile.modifiers and structure_type == StructureType.CITY):
+                    internal_edges.add(adj_edge)
 
-        for adjacent_edge in Tile.adjacent_edges(edge):
-            if tile.internal_edges.get(adjacent_edge) == structure_type:
-                if not (
-                    TileModifier.BROKEN_CITY in tile.modifiers
-                    and structure_type == StructureType.CITY
-                ):
-                    connected_internal_edges.append(adjacent_edge)
+        # Handle bridge through center if applicable
+        if (len(internal_edges) == 1 and structure_bridge and structure_bridge in tile.modifiers):
+            opposite = Tile.get_opposite(edge)
+            if StructureType.is_compatible(structure_type,tile.internal_edges.get(opposite)):
+                internal_edges.add(opposite)
 
-                    for adjacent_edge2 in Tile.adjacent_edges(adjacent_edge):
-                        if (
-                            tile.internal_edges.get(adjacent_edge2) == structure_type
-                            and adjacent_edge2 not in connected_internal_edges
-                        ):
-                            connected_internal_edges.append(adjacent_edge2)
-
-        if (
-            len(connected_internal_edges) == 1
-            and structure_bridge
-            and structure_bridge in tile.modifiers
-        ):
-            if StructureType.is_compatible(
-                structure_type,
-                tile.internal_edges.get(Tile.get_opposite(edge))
-            ):
-                connected_internal_edges.append(Tile.get_opposite(edge))
-
-        if structure_type == StructureType.ROAD_START:
-            structure_type = StructureType.ROAD
-
-        for cid in connected_internal_edges:
+        # Traverse neighbors
+        for internal_edge in internal_edges:
             if tile.placed_pos is None:
+                is_complete = False
                 continue
 
-            neighbouring_tile = Tile.get_external_tile(cid, tile.placed_pos, grid)
-            if neighbouring_tile:
-                neighbouring_tile_edge = Tile.get_opposite(cid)
-                neighbouring_structure_type = neighbouring_tile.internal_edges.get(neighbouring_tile_edge)
+            # Get the tile which is located based on edge and opposite edge
+            neighbor = Tile.get_external_tile(internal_edge, tile.placed_pos, grid)
+            opposite_edge = Tile.get_opposite(internal_edge)
 
-                if (
-                    structure_type == StructureType.ROAD
-                    and neighbouring_structure_type == StructureType.ROAD_START
-                ):
-                    continue
+            # If there is no tile on the left then return false
+            if not neighbor:
+                is_complete = False
+                continue
 
-                if (neighbouring_tile, neighbouring_tile_edge) not in visited:
-                    queue.append((neighbouring_tile, neighbouring_tile_edge))
+            neighbor_type = neighbor.internal_edges.get(opposite_edge)
 
+            # Special ROAD_START handling
+            if structure_type == StructureType.ROAD and neighbor_type == StructureType.ROAD_START:
+                continue
 
-def evaluate_move(game, move):
+            # If neighbour is not same type as structure type then return false
+            if neighbor_type != structure_type:
+                is_complete = False
+                continue
+
+            if (neighbor, opposite_edge) not in visited:
+                queue.append((neighbor, opposite_edge))
+
+    return structure_type, connected_parts, is_complete, unique_tiles
+
+def get_shield_cities_count(tiles) -> int:
+    """
+    Given a collection of tiles finds how many are shielded
+    """
+    count = 0
+    for tile in tiles:
+        if TileModifier.EMBLEM in tile.modifiers:
+            count+=1
+    return count
+
+def count_existing_neighbours_monastery(game, move):
+    curr_x, curr_y = move['tx'], move['ty']
+    curr_grid = game.state.map._grid
+    total_neighbours = 0
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            if dx == 0 and dy == 0:
+                continue
+            nx, ny = curr_x + dx, curr_y + dy
+            if not (0 <= nx < MAX_MAP_LENGTH and 0 <= ny < MAX_MAP_LENGTH):
+                continue
+            if curr_grid[ny][nx] is not None:
+                total_neighbours += 1
+    return total_neighbours
+
+def city_extension_bonus(game, connected_parts):
+    claimed_by_us = False
+    #connected parts is (tile, edge)
+    claim_bonus = 3
+    for tile, edge in connected_parts:
+        claims = game.state._get_claims(tile, edge)
+        for claim in claims:
+            if claim.owner == game.state.me.player_id:
+                claimed_by_us = True
+                break
+    if claimed_by_us:
+        return claim_bonus
+    return 0
+
+def evaluate_move(game, move, bot_state: BotState):
     score = 0
     tile = move["tile"]
+    # Might need a different method for monastery checking this is just seeing if tile itself is monastery (we could check surronding 3x3 tiles)
     if TileModifier.MONASTARY in tile.modifiers:
-        score+= 4.5
+        neighbour_weighting = count_existing_neighbours_monastery(game, move)*1.1
+        score+= (4.5 + neighbour_weighting) 
+    else:
+        # Otherwise see if tile is surronding a monastary we own and work on finishing off this monastary
+        for monastary_point in bot_state.monastary_points:
+            # This means the tile will surrond the monastary
+            empty = 0
+            if abs(move["tx"]-monastary_point[0]) <= 1 and abs(move["ty"]-monastary_point[1]) <= 1:
+                # Now determine how many tiles are empty around this monastary
+                for horizontal in range(-1,2):
+                    for vertical in range(-1,2):
+                        if game.state.map._grid[monastary_point[1]+vertical][monastary_point[0]+horizontal] is None:
+                            empty += 1
+                print(f'Monastary we own has {empty} empty tiles',flush=True)
+                # Now determine how many points we want to add based on this subtract 9 from the amount of tiles needed
+                score += 9 - empty 
+                break
+        
     x, y = move["tx"], move["ty"]
-    score += check_if_tile_completes_structure(game, tile,x, y)*2
-
+    # Simulate a new grid 
     new_grid = [row[:] for row in game.state.map._grid]
     tile.placed_pos = (x, y)
     new_grid[y][x] = tile
 
-    print(f'Score before checking edges {score}', flush=True)
+    # Iterate through each edge in tile to see what structure it completes if any
     edges = tile.get_external_tiles(new_grid).keys()
     for edge in edges:
-        score += 2*len(list(transverse_connected_component(tile, edge, new_grid)))
-        print(f'Score after checking edges {score}', flush=True)
+        structure_type, connected_parts, is_complete, unique_tiles = analyze_structure_from_edge(tile,edge,new_grid)
+        print(structure_type,connected_parts,is_complete,unique_tiles,flush=True)
+        # Get the size of the structure
+        structure_size = len(unique_tiles)
+        # Now see the type of structure and if it is a city add more points
+        if structure_type == StructureType.CITY:
+            claim_bonus = city_extension_bonus(game, connected_parts=connected_parts)
+            score += claim_bonus
+            if is_complete:
+                score += structure_size * 2 + get_shield_cities_count(unique_tiles) * 2
+                print(f'This many shielded tiles found: {get_shield_cities_count(unique_tiles)}', flush=True)
+            else:
+                score += structure_size + get_shield_cities_count(unique_tiles) * 2
+                print(f'This many shielded tiles found: {get_shield_cities_count(unique_tiles)}', flush=True)
+        elif structure_type == StructureType.ROAD or structure_type == StructureType.ROAD_START:
+            if is_complete:
+                score += structure_size
+            else:
+                pass
+    print(score,flush=True)
     return score
 
-def get_best_evaluated_move(game: Game, legal_moves: set):
+def get_best_evaluated_move(game: Game, legal_moves: set, bot_state: BotState):
     best_move = list(legal_moves)[0]
     best_score = 0
     for move in legal_moves:
-        score = evaluate_move(game, move)
+        score = evaluate_move(game, move, bot_state)
         if score>best_score:
             best_score = score
             best_move = move
@@ -326,9 +393,14 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
                 for rotation in range(4):
                     if simulate_validate_place_tile(game, tile, rotation, x, y):
                         legal_moves.append({"tile": tile,"rotation": rotation,"tx": x,"ty": y, "index":tile_index})
+
             if len(legal_moves) == 0:
                 return brute_force_tile(game,bot_state,query)
-            move = get_best_evaluated_move(game, legal_moves)
+            
+            move = get_best_evaluated_move(game, legal_moves, bot_state)
+            # If tile is monastary add its positions to our bot state
+            if TileModifier.MONASTARY in move["tile"].modifiers:
+                bot_state.add_monastary(move["tx"],move["ty"])
             move["tile"].rotate_clockwise(move["rotation"])
             move["tile"].placed_pos = (move["tx"], move["ty"])
             bot_state.last_tile = move["tile"]
@@ -359,6 +431,9 @@ def brute_force_tile(
                                 tile.rotate_clockwise(rotation)
                                 bot_state.last_tile = tile
                                 bot_state.last_tile.placed_pos = (x1, y1)
+                                # If tile is monastary add its positions to our bot state
+                                if TileModifier.MONASTARY in tile.modifiers:
+                                    bot_state.add_monastary(x1,y1)
                                 return game.move_place_tile(query, tile._to_model(), tile_index)
                         tile.rotate_clockwise(4)  # Reset tile to original orientation
 
