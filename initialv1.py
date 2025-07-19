@@ -30,7 +30,7 @@ class BotState:
         self.monastary_points = []
     
     def update_strat_pref(self, game_state):
-        curr_points = game_state.points
+        curr_points = game_state.me.points
         opponent_points = [
             p.points
             for p in game_state.players.values()
