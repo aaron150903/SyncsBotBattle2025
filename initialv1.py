@@ -270,7 +270,7 @@ def city_extension_bonus(game, connected_parts):
     for tile, edge in connected_parts:
         claims = game.state._get_claims(tile, edge)
         for claim in claims:
-            if claim.owner == game.state.me.player_id:
+            if claim == game.state.me.player_id:
                 claimed_by_us = True
                 break
     if claimed_by_us:
