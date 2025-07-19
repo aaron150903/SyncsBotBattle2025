@@ -15,6 +15,7 @@ from lib.interact.structure import StructureType
 
 from collections import deque
 from typing import Callable, Iterator
+from copy import deepcopy
 
 
 class BotState:
@@ -71,7 +72,6 @@ def simulate_validate_place_tile(game, tile, rotation, x, y):
     Simulate placement validation for tile before calling game.move_place_tile.
     Checks edge matching, river connection, U-turns, and adjacency.
     """
-    from copy import deepcopy
 
     grid = game.state.map._grid
     rotated_tile = deepcopy(tile)
@@ -129,10 +129,10 @@ def simulate_validate_place_tile(game, tile, rotation, x, y):
             if 0 <= forecast_x < MAX_MAP_LENGTH and 0 <= forecast_y < MAX_MAP_LENGTH:
                 if grid[forecast_y][forecast_x] is not None:
                     return False
-
+                
     if not has_any_neighbor:
         return False  # Must be adjacent to something
-
+    
     if river_flag and river_connections == 0:
         return False  # River tile not connected
 
@@ -161,13 +161,12 @@ def check_if_tile_completes_structure(game: Game, tile: Tile, x: int, y: int) ->
         component = list(transverse_connected_component(tile, edge, new_grid))
         for t, e in component:
             if t.placed_pos is None:
-                return False
+                return 0
             if t.get_external_tile(e, t.placed_pos, new_grid) is None:
-                return False
+                return 0
         if component:
-            return True  # at least one structure is completed
-    return False
-
+            return 2*len(component)  # at least one structure is completed
+    return 0
 
 def transverse_connected_component(
     start_tile: "Tile",
@@ -246,6 +245,36 @@ def transverse_connected_component(
                     queue.append((neighbouring_tile, neighbouring_tile_edge))
 
 
+def evaluate_move(game, move):
+    score = 0
+    tile = move["tile"]
+    if TileModifier.MONASTARY in tile.modifiers:
+        score+= 4.5
+    x, y = move["tx"], move["ty"]
+    score += check_if_tile_completes_structure(game, tile,x, y)*2
+
+    new_grid = [row[:] for row in game.state.map._grid]
+    tile.placed_pos = (x, y)
+    new_grid[y][x] = tile
+
+    print(f'Score before checking edges {score}', flush=True)
+    edges = tile.get_external_tiles(new_grid).keys()
+    for edge in edges:
+        score += 2*len(list(transverse_connected_component(tile, edge, new_grid)))
+        print(f'Score after checking edges {score}', flush=True)
+    return score
+
+def get_best_evaluated_move(game: Game, legal_moves: set):
+    best_move = list(legal_moves)[0]
+    best_score = 0
+    for move in legal_moves:
+        score = evaluate_move(game, move)
+        if score>best_score:
+            best_score = score
+            best_move = move
+    return best_move
+
+
 def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) -> MovePlaceTile:
     """
     Handles placing a tile from hand by checking river phase and attempting valid moves.
@@ -277,6 +306,7 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
                     nx, ny = x + dx, y + dy
                     if (0 <= nx < width and 0 <= ny < height and grid[ny][nx] is None):
                         candidates.add((nx, ny))
+    legal_moves = []
 
     for tile_index, tile in enumerate(game.state.my_tiles):
         if is_river:
@@ -290,24 +320,47 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
                         bot_state.last_tile = tile
                         return game.move_place_tile(query, tile._to_model(), tile_index)
                 tile.rotate_clockwise(4)  # Reset tile
-        
         else:
             print("In normal stage", flush=True)
             for (x, y) in candidates:
                 for rotation in range(4):
                     if simulate_validate_place_tile(game, tile, rotation, x, y):
-                        tile.rotate_clockwise(rotation)
-                        if check_if_tile_completes_structure(game, tile, x, y):
-                            print('Structure Complete!',flush=True)
-                            tile.placed_pos = (x, y)
-                            bot_state.last_tile = tile
-                            return game.move_place_tile(query, tile._to_model(), tile_index)
-                        print('Structure Incomplete', flush=True)
-                tile.rotate_clockwise(4)  # Reset rotation
-    
-    print("Could not place tile with strategy, using brute force...", flush=True)
-    return brute_force_tile(game, bot_state, query)
+                        legal_moves.append({"tile": tile,"rotation": rotation,"tx": x,"ty": y, "index":tile_index})
+            if len(legal_moves) == 0:
+                return brute_force_tile(game,bot_state,query)
+            move = get_best_evaluated_move(game, legal_moves)
+            move["tile"].rotate_clockwise(move["rotation"])
+            move["tile"].placed_pos = (move["tx"], move["ty"])
+            bot_state.last_tile = move["tile"]
+            return game.move_place_tile(query, move["tile"]._to_model(), move["index"])
 
+def brute_force_tile(
+    game: Game, bot_state: BotState, query: QueryPlaceTile
+) -> MovePlaceTile:
+    grid = game.state.map._grid
+    height = len(grid)
+    width = len(grid[0]) if height > 0 else 0
+    directions = {
+        (0, 1): "top",
+        (1, 0): "right",
+        (0, -1): "bottom",
+        (-1, 0): "left",
+    }
+    for y in range(height):
+        for x in range(width):
+            if grid[y][x] is not None:
+                print(f"Checking if tile can be placed near tile - {grid[y][x]}")
+                for tile_index, tile in enumerate(game.state.my_tiles):
+                    for direction in directions:
+                        dx, dy = direction
+                        x1, y1 = (x + dx, y + dy)
+                        for rotation in range(4):
+                            if simulate_validate_place_tile(game, tile, rotation, x1, y1):
+                                tile.rotate_clockwise(rotation)
+                                bot_state.last_tile = tile
+                                bot_state.last_tile.placed_pos = (x1, y1)
+                                return game.move_place_tile(query, tile._to_model(), tile_index)
+                        tile.rotate_clockwise(4)  # Reset tile to original orientation
 
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState):
     structure_points = {StructureType.CITY: 3, StructureType.MONASTARY: 3, StructureType.ROAD: 2, StructureType.ROAD_START: 2, StructureType.GRASS: 1, StructureType.RIVER: 0}
@@ -318,6 +371,7 @@ def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState
 def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPlaceMeeple):
     if bot_state.last_tile is None or bot_state.meeples_placed == 7:
         return game.move_place_meeple_pass(query)
+        
     
     structures = game.state.get_placeable_structures(bot_state.last_tile._to_model())
     tile_model = bot_state.last_tile
@@ -337,8 +391,9 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
             is_completed = game.state._check_completed_component(placed_tile, edge)
             
             print(f"Edge: {edge}, Structure: {structure}, Claimed: {is_claimed}, Completed: {is_completed}")
-            
-            if is_claimed or is_completed:
+            #Monasteries can't be claimed or completed prior to being handed out, the person drawing the monastary
+            #will be the first to claim or complete it
+            if edge != 'MONASTARY' and (is_claimed or is_completed):
                 print(f"Skipping {edge} - claimed: {is_claimed}, completed: {is_completed}")
                 continue
             else:
@@ -368,38 +423,6 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
             return game.move_place_meeple_pass(query)
             
     return game.move_place_meeple_pass(query)
-
-
-def brute_force_tile(
-    game: Game, bot_state: BotState, query: QueryPlaceTile
-) -> MovePlaceTile:
-    grid = game.state.map._grid
-    height = len(grid)
-    width = len(grid[0]) if height > 0 else 0
-
-    directions = {
-        (0, 1): "top",
-        (1, 0): "right",
-        (0, -1): "bottom",
-        (-1, 0): "left",
-    }
-
-    for y in range(height):
-        for x in range(width):
-            if grid[y][x] is not None:
-                print(f"Checking if tile can be placed near tile - {grid[y][x]}")
-                for tile_index, tile in enumerate(game.state.my_tiles):
-                    for direction in directions:
-                        dx, dy = direction
-                        x1, y1 = (x + dx, y + dy)
-                        for rotation in range(4):
-                            if simulate_validate_place_tile(game, tile, rotation, x1, y1):
-                                tile.rotate_clockwise(rotation)
-                                bot_state.last_tile = tile
-                                bot_state.last_tile.placed_pos = (x1, y1)
-                                return game.move_place_tile(query, tile._to_model(), tile_index)
-                        tile.rotate_clockwise(4)  # Reset tile to original orientation
-
 
 if __name__ == "__main__":
     main()
