@@ -297,7 +297,9 @@ def large_unclaimed_structures(game, size_threshold=3):
                 for (t1, e1) in comp_parts:
                     seen.add((t1, e1))
                 structure_length = len(tiles)
-                print(f"Unclaimed structure bonus {structure_length}")
+                if structure_length > 5:
+                    print(f"Unclaimed structure bonus {structure_length}")
+                    print(tile.tile_id)
                 if is_complete or len(tiles) < size_threshold:
                     continue
 
