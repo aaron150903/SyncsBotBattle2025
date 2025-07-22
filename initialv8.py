@@ -323,7 +323,8 @@ def add_bonus_for_unclaimed_structures(game, move):
 def evaluate_move(game, move, bot_state: BotState):
     score = 0
     tile = move["tile"]
-    score += add_bonus_for_unclaimed_structures(game, move)
+    unclaimed_structure_bonus = add_bonus_for_unclaimed_structures(game, move)
+    score += unclaimed_structure_bonus
     # Select best location to place monastary based on how speed we can complete the structure
     if TileModifier.MONASTARY in tile.modifiers:
         neighbour_weighting = count_existing_neighbours_monastery(game, move) * 1.1
