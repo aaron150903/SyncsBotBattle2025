@@ -269,7 +269,7 @@ def opponent_monastary_extension_penalty(game,bot_state,move):
     # No penalty if we are not freeing anything
     return 0
 
-def large_unclaimed_structures(game, size_threshold=5):
+def large_unclaimed_structures(game, size_threshold=2):
     grid = game.state.map._grid
     seen = set() #add all seen tile edge combos here so we don't explore components we've already seen
     result = {} #only add large enough unclaimed structures into here
@@ -290,6 +290,8 @@ def large_unclaimed_structures(game, size_threshold=5):
                     continue
                 for (t1, e1) in comp_parts:
                     seen.add((t1, e1))
+                structure_length = len(tiles)
+                print(f"Unclaimed structure bonus {structure_length}")
                 if is_complete or len(tiles) < size_threshold:
                     continue
 
