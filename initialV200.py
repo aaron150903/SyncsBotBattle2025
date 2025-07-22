@@ -31,6 +31,7 @@ class BotState:
         self.move = 0
         # Store the structures we have claimed will track all
         self.claimed_structures = []
+        self.unclaimed_open_spots = {}
     
     def update_strat_pref(self, game_state):
         curr_points = game_state.me.points
@@ -274,7 +275,7 @@ def opponent_monastary_extension_penalty(game,bot_state,move):
     # No penalty if we are not freeing anything
     return 0
 
-def large_unclaimed_structures(game, size_threshold=2):
+def large_unclaimed_structures(game, size_threshold=3):
     grid = game.state.map._grid
     seen = set() #add all seen tile edge combos here so we don't explore components we've already seen
     result = {} #only add large enough unclaimed structures into here
@@ -313,24 +314,23 @@ def large_unclaimed_structures(game, size_threshold=2):
                 result[(structure_type, frozenset(tiles))] = open_spots
     return result
                     
-def add_bonus_for_unclaimed_structures(game, move):
-    (x,y) = move['tx'], move['ty']
-    unclaimed_structures = large_unclaimed_structures(game, 5)
+def add_bonus_for_unclaimed_structures(bot_state, move):
+    x, y = move['tx'], move['ty']
     bonus = 0
-    for (structure_type, structure_tiles), open_spots in unclaimed_structures.items():
-        for open_spot in open_spots:
-            if open_spot == (x, y):
-                if structure_type in [StructureType.ROAD, StructureType.ROAD_START]:
-                    bonus += len(structure_tiles) * 1
-                elif structure_type == StructureType.CITY:
-                    bonus += len(structure_tiles) * 1.5
-                break
+    for (struct_type, struct_tiles), open_spots in bot_state.unclaimed_open_spots.items():
+        if (x, y) in open_spots:
+            size = len(struct_tiles)
+            if struct_type in (StructureType.ROAD, StructureType.ROAD_START):
+                bonus += size * 1.0
+            else:
+                bonus += size * 1.5
+            break
     return bonus
 
 def evaluate_move(game, move, bot_state: BotState):
     is_winner = bot_state.is_winner(game.state)
     score = 0
-    unclaimed_structure_bonus = add_bonus_for_unclaimed_structures(game, move)
+    unclaimed_structure_bonus = add_bonus_for_unclaimed_structures(bot_state, move)
     print(f"Unclaimed structure bonus: {unclaimed_structure_bonus}")
     score += unclaimed_structure_bonus
     tile = move["tile"]
@@ -512,7 +512,7 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
                         candidates.add((nx, ny))
 
     legal_moves = []
-
+    bot_state.unclaimed_open_spots = large_unclaimed_structures(game, size_threshold=3)
     for tile_index, tile in enumerate(game.state.my_tiles):
         if is_river:
             print("In river stage", flush=True)
