@@ -367,12 +367,12 @@ def evaluate_move(game, move, bot_state: BotState):
         elif structure_type in [StructureType.ROAD, StructureType.ROAD_START]:
             if ownership:
                 if is_complete:
-                     score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type)
+                     score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type, True)
                      multiplier = 1.5 if bot_state.move >= 10 else 1.0
                      base_score = structure_size * multiplier if is_complete else structure_size * return_probability_given_comptaible_tiles(len(given_structure_type_return_tiles_remaining(structure_type, game.state.map.available_tiles)), game.state.map.available_tiles)
                      score += base_score - penalty
                 else:
-                    score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type)
+                    score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type, True)
                     base_score = structure_size * multiplier if is_complete else structure_size * return_probability_given_comptaible_tiles(len(given_structure_type_return_tiles_remaining(structure_type, game.state.map.available_tiles)), game.state.map.available_tiles)
                     score += base_score - penalty
             else:
