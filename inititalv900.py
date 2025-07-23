@@ -708,8 +708,7 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
         
         for edge, structure in structures.items():
             # Use the placed tile from the map for claims checking
-            total_claims = game.state._get_claims(placed_tile, edge)
-            is_claimed = game.state.me.player_id in total_claims
+            is_claimed = game.state._get_claims(placed_tile, edge)
             is_completed = game.state._check_completed_component(placed_tile, edge)
             
             print(f"Edge: {edge}, Structure: {structure}, Claimed: {is_claimed}, Completed: {is_completed}")
@@ -733,7 +732,9 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
         best_score, best_edge, best_structure = best_meeple_placement[0], best_meeple_placement[1], best_meeple_placement[2]
        
         print(f"Best placement: Edge={best_edge}, Structure={best_structure}, Score={best_score}")
-        
+        total_claims = game.state._get_claims(placed_tile, best_edge)
+        if game.state.me.player_id in total_claims:
+            return game.move_place_meeple_pass(query)
         if (bot_state.strat_pref == 'A' and best_score > 1):
             # Add the structure to the ones we own
             bot_state.add_claimed_structure(best_structure,placed_tile,best_edge)
