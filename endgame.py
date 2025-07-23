@@ -788,6 +788,7 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
             if bot_state.last_tile == curr_tile:
                 bot_state.in_stealing_mode = False
                 bot_state.stealable_structs = []
+                print(f"FOUND STEALING POSITION")
                 return game.move_place_meeple(query, curr_tile._to_model(), placed_on=steal_edge)
         bot_state.in_stealing_mode = False
         bot_state.stealable_structs = []
