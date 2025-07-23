@@ -279,8 +279,8 @@ def corner_steal_bonus(move, game, bot_state, steal_value_threshold = 5):
     curr_x, curr_y = move['tx'], move['ty']
     curr_tile = move['tile']
     grid = game.state.map._grid
-    directions = {(-1, -1): "bottom_edge", (-1, 1): "bottom_edge", (1, -1): "top_edge", (1, 1): "top_edge"}
-    my_edge = {"bottom_edge": "top_edge", "top_edge": "bottom_edge"}
+    directions = {(-1, -1): "right_edge", (-1, 1): "left_edge", (1, -1): "right_edge", (1, 1): "left_edge"}
+    my_edge = {(-1, -1): "top_edge", (-1, 1): "top_edge", (1, -1): "bottom_edge", (1, 1): "bottom_edge"}
     steal_bonus = 0
     tile_steals = []
     for (dy, dx), neighbours_edge in directions.items():
@@ -290,7 +290,7 @@ def corner_steal_bonus(move, game, bot_state, steal_value_threshold = 5):
         corner_tile = grid[ny][nx]
         if not corner_tile:
             continue
-        my_tile_edge = my_edge[neighbours_edge]
+        my_tile_edge = my_edge[(dy, dx)]
         if curr_tile.internal_edges.get(my_tile_edge) != StructureType.CITY:
             continue
         if curr_tile.internal_edges.get(my_tile_edge) != corner_tile.internal_edges.get(neighbours_edge):
