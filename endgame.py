@@ -215,20 +215,20 @@ def count_existing_neighbours_monastery(game, move):
                 total_neighbours += 1
     return total_neighbours
 
-def city_extension_bonus(game, connected_parts, structure_size, bot_state, structure_type):
+def city_extension_bonus(game, connected_parts, structure_size, bot_state, structure_type, has_our_claim):
     if structure_type == StructureType.CITY:
         claim_bonus = structure_size * 2
     else:
         claim_bonus = structure_size 
     
-    bonus = 0
-    has_our_claim = False
+    #bonus = 0
+    #has_our_claim = False
     
-    for tile, edge in connected_parts:
-        claims = game.state._get_claims(tile, edge)
-        for claim in claims:
-            if claim == game.state.me.player_id:
-                has_our_claim = True
+    #for tile, edge in connected_parts:
+    #    claims = game.state._get_claims(tile, edge)
+    #    for claim in claims:
+    #        if claim == game.state.me.player_id:
+    #            has_our_claim = True
 
     if has_our_claim:
         # Towards end game prioritize connections more
@@ -239,13 +239,13 @@ def city_extension_bonus(game, connected_parts, structure_size, bot_state, struc
 
     return bonus
 
-def city_helping_penalty(game, tile, edge):
+def city_helping_penalty(game, tile, edge, claims):
     """
     Penalizes helping an opponent's city (or road) by checking if the current player
     has any claims on the structure. If not, and other players do, return a penalty
     based on their points (stronger penalty for stronger players).
     """
-    claims = game.state._get_claims(tile, edge)
+    #claims = game.state._get_claims(tile, edge)
     
     # If no one has claimed the structure, no penalty
     if not claims:
@@ -334,16 +334,15 @@ def evaluate_move(game, move, bot_state: BotState):
 
     for edge in tile.get_external_tiles(new_grid).keys():
         structure_type, connected_parts, is_complete, unique_tiles = analyze_structure_from_edge(tile, edge, new_grid)
-        structure_size = len(unique_tiles)
-        penalty = city_helping_penalty(game, tile, edge)
         ownership = False
-        # Check if we own structure
+        claimants = game.state._get_claims(tile, edge)
         if game.state.me.player_id in game.state._get_claims(tile, edge):
             ownership = True
-
+        structure_size = len(unique_tiles)
+        penalty = city_helping_penalty(game, tile, edge, claimants) 
         if structure_type == StructureType.CITY:
             if ownership:
-                score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type)
+                score += city_extension_bonus(game, connected_parts, structure_size,bot_state,structure_type, True)
                 shield_bonus = 0
                 # Add shield bonus if late in game as this will always give us 2 points and make sure we own structure
                 shield_bonus = get_shield_cities_count(unique_tiles) * (2.5 if bot_state.move >= 10 else 2)
