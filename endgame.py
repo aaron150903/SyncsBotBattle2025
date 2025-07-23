@@ -291,9 +291,9 @@ def corner_steal_bonus(move, game, bot_state, steal_value_threshold = 5):
         if not corner_tile:
             continue
         my_tile_edge = my_edge[neighbours_edge]
-        if curr_tile.internal_edges.get(my_edge) != StructureType.CITY:
+        if curr_tile.internal_edges.get(my_tile_edge) != StructureType.CITY:
             continue
-        if curr_tile.internal_edges.get(my_edge) != corner_tile.internal_edges.get(neighbours_edge):
+        if curr_tile.internal_edges.get(my_tile_edge) != corner_tile.internal_edges.get(neighbours_edge):
             continue
         _, _, _, unique_tiles = analyze_structure_from_edge(corner_tile, neighbours_edge, grid)
         curr_steal_value = len(unique_tiles) * 2
