@@ -708,7 +708,8 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
         
         for edge, structure in structures.items():
             # Use the placed tile from the map for claims checking
-            is_claimed = game.state._get_claims(placed_tile, edge)
+            total_claims = game.state._get_claims(placed_tile, edge)
+            is_claimed = game.state.me.player_id in total_claims
             is_completed = game.state._check_completed_component(placed_tile, edge)
             
             print(f"Edge: {edge}, Structure: {structure}, Claimed: {is_claimed}, Completed: {is_completed}")
