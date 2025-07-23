@@ -101,7 +101,6 @@ def main():
         game.send_move(choose_move(query))
 
 
-
 def is_river_tile(tile) -> bool:
     """
     Checks if a tile contains any river edges.
@@ -218,24 +217,53 @@ def count_existing_neighbours_monastery(game, move):
 
 def city_extension_bonus(game, connected_parts):
     claim_bonus = 3
-    penalty = -2  # For opponent claims
     bonus = 0
     has_our_claim = False
-    has_enemy_claim = False
     
     for tile, edge in connected_parts:
         claims = game.state._get_claims(tile, edge)
         for claim in claims:
             if claim == game.state.me.player_id:
                 has_our_claim = True
-            else:
-                has_enemy_claim = True
 
     if has_our_claim:
         bonus += claim_bonus
-    if has_enemy_claim:
-        bonus += penalty  # Apply penalty if any part is claimed by opponent
     return bonus
+
+def city_helping_penalty(game, tile, edge):
+    """
+    Penalizes helping an opponent's city (or road) by checking if the current player
+    has any claims on the structure. If not, and other players do, return a penalty
+    based on their points (stronger penalty for stronger players).
+    """
+    claims = game.state._get_claims(tile, edge)
+    
+    # If no one has claimed the structure, no penalty
+    if not claims:
+        return 0
+    
+    # If we are one of the claimers, no penalty
+    if game.state.me.player_id in claims:
+        return 0
+
+    # Otherwise, penalize based on the *strongest* opponent who benefits
+    opponent_scores = [
+        player.points
+        for player in game.state.players.values()
+        if player.player_id in claims
+    ]
+
+    if not opponent_scores:
+        return 0
+
+    # Heuristic: use the highest score among opponents in the structure
+    strongest_opponent_points = max(opponent_scores)
+
+    # Normalize the penalty; adjust the divisor for difficulty tuning
+    penalty = strongest_opponent_points / 5
+
+    return penalty
+
 
 def opponent_monastary_extension_penalty(game,bot_state,move):
     """
@@ -272,25 +300,24 @@ def evaluate_move(game, move, bot_state: BotState):
     tile = deepcopy(move["tile"])
     tile.rotate_clockwise(move["rotation"])
 
-    # Select best location to place monastary based on how speed we can complete the structure
     if TileModifier.MONASTARY in tile.modifiers:
         neighbour_weighting = count_existing_neighbours_monastery(game, move) * 1.1
         score += (4.5 + neighbour_weighting)
     else:
-        # Also consider if we can place tile on monastary we already own
         for monastary_point in bot_state.monastary_points:
-            empty = 0
             if abs(move["tx"] - monastary_point[0]) <= 1 and abs(move["ty"] - monastary_point[1]) <= 1:
+                empty = 0
                 for dx in range(-1, 2):
                     for dy in range(-1, 2):
-                        if game.state.map._grid[monastary_point[1] + dy][monastary_point[0] + dx] is None:
-                            empty += 1
+                        x, y = monastary_point[0] + dx, monastary_point[1] + dy
+                        if 0 <= y < len(game.state.map._grid) and 0 <= x < len(game.state.map._grid[0]):
+                            if game.state.map._grid[y][x] is None:
+                                empty += 1
                 score += 9 - empty
                 break
 
-    # Now deduct points for cases where we are helping opponent add to their monastary penalty will be based on how close meeple is from being freed
-    score -= opponent_monastary_extension_penalty(game,bot_state,move)
-    
+    score -= opponent_monastary_extension_penalty(game, bot_state, move)
+
     x, y = move["tx"], move["ty"]
     new_grid = [row[:] for row in game.state.map._grid]
     tile.placed_pos = (x, y)
@@ -299,43 +326,40 @@ def evaluate_move(game, move, bot_state: BotState):
     for edge in tile.get_external_tiles(new_grid).keys():
         structure_type, connected_parts, is_complete, unique_tiles = analyze_structure_from_edge(tile, edge, new_grid)
         structure_size = len(unique_tiles)
+        penalty = city_helping_penalty(game, tile, edge)
 
         if structure_type == StructureType.CITY:
-            claim_bonus = city_extension_bonus(game, connected_parts)
-            score += claim_bonus
+            score += city_extension_bonus(game, connected_parts)
+            shield_bonus = get_shield_cities_count(unique_tiles) * 2
+            base_score = structure_size * 2 + shield_bonus
 
             if is_complete:
-                shield_bonus = get_shield_cities_count(unique_tiles) * 2
-                base_score = structure_size * 2 + shield_bonus
                 multiplier = 1.5 if bot_state.move >= 10 else 1.0
-                score += base_score * multiplier
+                score += base_score * multiplier - penalty
             else:
-                structure_type, connected_parts, is_complete, unique_tiles = analyze_structure_from_edge(tile, edge, game.state.map._grid)
                 tile_points_needed = forecast_number_of_tiles_needed_to_complete(structure_type, unique_tiles, game.state.map._grid)
                 tiles_remaining = given_structure_type_return_tiles_remaining(structure_type, game.state.map.available_tiles)
                 probability = return_probability_given_comptaible_tiles(len(tiles_remaining), game.state.map.available_tiles)
-                shield_bonus = get_shield_cities_count(unique_tiles) * 2
-                score += (structure_size + shield_bonus) * probability
+                score += (base_score * probability - penalty)
 
         elif structure_type in [StructureType.ROAD, StructureType.ROAD_START]:
-            if is_complete:
-                multiplier = 1.5 if bot_state.move >= 10 else 1.0
-                score += structure_size * multiplier
-            else:
-                structure_type, connected_parts, is_complete, unique_tiles = analyze_structure_from_edge(tile, edge, game.state.map._grid)
-                tile_points_needed = forecast_number_of_tiles_needed_to_complete(structure_type, unique_tiles, game.state.map._grid)
-                tiles_remaining = given_structure_type_return_tiles_remaining(structure_type, game.state.map.available_tiles)
-                probability = return_probability_given_comptaible_tiles(len(tiles_remaining), game.state.map.available_tiles)
-                score += structure_size * probability
+            multiplier = 1.5 if bot_state.move >= 10 else 1.0
+            base_score = structure_size * multiplier if is_complete else structure_size * return_probability_given_comptaible_tiles(len(given_structure_type_return_tiles_remaining(structure_type, game.state.map.available_tiles)), game.state.map.available_tiles)
+            score += base_score - penalty
 
-    print(score, flush=True)
+    if bot_state.meeples_placed <= 2:
+        score *= 0.85
+    score += add_bonus_for_unclaimed_structures(bot_state, move)
+    print(f"Evaluated score: {score}", flush=True)
     return score
 
-def large_unclaimed_structures(game, size_threshold=3):
+
+def large_unclaimed_structures(game, bot_state, size_threshold=3):
     grid = game.state.map._grid
     seen = set()
     result = {}
     directions = {(0,-1):"top_edge", (1,0):"right_edge", (0,1):"bottom_edge", (-1,0):"left_edge"}
+    size_threshold = size_threshold if bot_state.move < 10 else (size_threshold + 1)
 
     for y in range(len(grid)):
         for x in range(len(grid[0])):
@@ -370,7 +394,7 @@ def add_bonus_for_unclaimed_structures(bot_state, move):
             else:
                 bonus += size * 2.0
             break
-    return bonus
+    return (bonus*0.5)
 
 
 def get_best_evaluated_move(game: Game, legal_moves: set, bot_state: BotState):
@@ -442,6 +466,7 @@ def can_place_tile_at(game: Game, tile: Tile, x: int, y: int, rotation: int = 0)
 
 
 def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) -> MovePlaceTile:
+    bot_state.meeples_placed = 7 - game.state.players_meeples[game.state.me.player_id]
     print(f'Our monastaries {bot_state.monastary_points}')
     bot_state.move += 1
     grid = game.state.map._grid
@@ -616,7 +641,8 @@ def compute_probability_of_monastary_completion(tile, game):
     return ((filled)*0.75)/8
     
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState, edge, tile, game):
-    strategy_bonus = 2 if bot_state.strat_pref == 'A' else 0
+    #strategy_bonus = 2 if bot_state.strat_pref == 'A' else 0
+    strategy_multiplier = 1.2 if bot_state.strat_pref == 'A' else 1
     probability = 1
     potential_points = 0 
 
@@ -649,17 +675,19 @@ def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState
         potential_points = 0
 
     # Late game make sure structures with lower probability are not as strong for consideration
-    if probability <= 0.4 and bot_state.move >= 10:
-        probability *= 0.75
+    if bot_state.move >= 10:
+        probability **= 1.5
     print(f'We are on move {bot_state.move}')
 
     # Determine meeple based on potential points * probability we can finish structure
-    total_points = potential_points + potential_points * probability + strategy_bonus
+    total_points = (potential_points + potential_points * probability) * strategy_multiplier
     print(f"[INFO] Structure: {structure_type.name}, Points: {potential_points}, Prob: {probability:.2f}, Move: {bot_state.move}, Score: {total_points:.2f}")
     return (total_points)
 
 def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPlaceMeeple):
-    if bot_state.last_tile is None or bot_state.meeples_placed == 7:
+    bot_state.meeples_placed = 7 - game.state.players_meeples[game.state.me.player_id]
+
+    if bot_state.last_tile is None or bot_state.meeples_placed >= 7:
         return game.move_place_meeple_pass(query)
         
     structures = game.state.get_placeable_structures(bot_state.last_tile._to_model())
@@ -706,12 +734,10 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
         print(f"Best placement: Edge={best_edge}, Structure={best_structure}, Score={best_score}")
         
         if (bot_state.strat_pref == 'A' and best_score > 1):
-            bot_state.meeples_placed += 1
             # Add the structure to the ones we own
             bot_state.add_claimed_structure(best_structure,placed_tile,best_edge)
             return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
         elif best_score > 2:
-            bot_state.meeples_placed += 1
             # Add the structure to the ones we own
             bot_state.add_claimed_structure(best_structure,placed_tile,best_edge)
             return game.move_place_meeple(query, tile_model._to_model(), placed_on=best_edge)
