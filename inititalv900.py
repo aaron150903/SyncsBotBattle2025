@@ -497,7 +497,7 @@ def handle_place_tile(game: Game, bot_state: BotState, query: QueryPlaceTile) ->
                         candidates.add((nx, ny))
 
     legal_moves = []
-    bot_state.unclaimed_open_spots = large_unclaimed_structures(game, size_threshold=3)
+    bot_state.unclaimed_open_spots = large_unclaimed_structures(game, bot_state, 3)
     for tile_index, tile in enumerate(game.state.my_tiles):
         if is_river:
             print("In river stage", flush=True)
