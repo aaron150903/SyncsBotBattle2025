@@ -216,10 +216,11 @@ def count_existing_neighbours_monastery(game, move):
     return total_neighbours
 
 def city_extension_bonus(game, connected_parts, structure_size, bot_state, structure_type, has_our_claim):
+    # Value City 2 and road 1
     if structure_type == StructureType.CITY:
         claim_bonus = structure_size * 2
     else:
-        claim_bonus = structure_size * 1.25
+        claim_bonus = structure_size 
 
     bonus = 0
     if has_our_claim:
@@ -272,7 +273,35 @@ def opponent_monastary_extension_penalty(game, bot_state, move):
         return 2 * (1 + (placed / 9))
     return 0
 
+def evaluate_game_position_and_get_multipliers(game, bot_state):
+    my_id = game.state.me.player_id
+    players = list(game.state.players.values())
 
+    # Extract scores
+    my_points = next(p.points for p in players if p.player_id == my_id)
+    opponent_points = [p.points for p in players if p.player_id != my_id]
+
+    # Calculate metrics
+    avg_opponent_points = sum(opponent_points) / len(opponent_points)
+    score_diff = my_points - avg_opponent_points
+
+    # Scaling logic based on position
+    if score_diff < -10:
+        # Losing badly —> go aggressive
+        return (1.5, 0.5)
+    elif score_diff < -2.5:
+        # Losing moderately —> boost bonus, lower penalty slightly
+        return (1.1, 0.8)
+    elif score_diff <= 2.5:
+        # Balanced —> play normally
+        return (1.0, 1.0)
+    elif score_diff <= 10:
+        # Slightly ahead —> small penalty increase
+        return (1.0, 1.1)
+    else:
+        # Winning big —> be conservative, penalize risky moves
+        return (0.85, 1.5)
+    
 def evaluate_move(game, move, bot_state):
     score = 0
     tile = deepcopy(move["tile"])
@@ -300,17 +329,16 @@ def evaluate_move(game, move, bot_state):
     tile.placed_pos = (x, y)
     new_grid[y][x] = tile
 
+    bonus_multiplier, penalty_multiplier = evaluate_game_position_and_get_multipliers(game,bot_state)
+
     for edge in tile.get_external_tiles(new_grid).keys():
         struct_type, parts, is_complete, unique_tiles = analyze_structure_from_edge(tile, edge, new_grid)
         claimants = game.state._get_claims(tile, edge)
         ownership = game.state.me.player_id in claimants
         size = len(unique_tiles)
-        penalty = city_helping_penalty(game, tile, edge, claimants)
 
-        # Claimed structure follow-up bonus
-        structure_id = (struct_type, frozenset(unique_tiles))
-        if structure_id in bot_state.claimed_structures:
-            score += 2.5  # bias toward follow-through
+        # Compute the penalty for a specific structure
+        penalty = city_helping_penalty(game, tile, edge, claimants)
 
         if struct_type == StructureType.CITY:
             shield_bonus = get_shield_cities_count(unique_tiles) * (2.5 if bot_state.move >= 10 else 2)
@@ -321,7 +349,7 @@ def evaluate_move(game, move, bot_state):
 
                 if is_complete:
                     multiplier = 1.5 if bot_state.move >= 10 else 1.0
-                    score += base_score * multiplier - penalty
+                    score += base_score * multiplier * bonus_multiplier - penalty
                 else:
                     tiles_needed = forecast_number_of_tiles_needed_to_complete(struct_type, unique_tiles, game.state.map._grid)
                     tiles_remaining = given_structure_type_return_tiles_remaining(struct_type, game.state.map.available_tiles)
@@ -337,19 +365,21 @@ def evaluate_move(game, move, bot_state):
                     # Penalize for impossible completions
                     if len(tiles_needed) > len(tiles_remaining):
                         score -= base_score 
+
                     else:
-                        score += (base_score * probability) - penalty
+                        score += (base_score * probability * bonus_multiplier) - penalty * penalty_multiplier
             else:
                 if len(claimants) > 0:
                     if is_complete:
-                        score -= penalty * (1.5 if bot_state.move >= 10 else 1.0)
+                        score -= penalty * penalty_multiplier * (1.5 if bot_state.move >= 10 else 1.0)
                     else:
-                       score -= penalty 
+                        score -= penalty * penalty_multiplier
+                    
 
         elif struct_type in [StructureType.ROAD, StructureType.ROAD_START]:
             base_score = size
             if is_complete:
-                base_score *= (1.5 if bot_state.move >= 10 else 1.0)
+                base_score *= (1.5 if bot_state.move >= 10 else 1.0) * bonus_multiplier
             else:
                 prob = return_probability_given_comptaible_tiles(
                     len(given_structure_type_return_tiles_remaining(struct_type, game.state.map.available_tiles)),
@@ -359,9 +389,9 @@ def evaluate_move(game, move, bot_state):
 
             if ownership:
                 score += city_extension_bonus(game, parts, size, bot_state, struct_type, True)
-                score += base_score - penalty
+                score += base_score - penalty * penalty_multiplier
             else:
-                score -= penalty * (1.5 if is_complete and bot_state.move >= 10 else 1.25 if is_complete else 1)
+                score -= penalty * penalty_multiplier * (1.5 if is_complete and bot_state.move >= 10 else 1.25 if is_complete else 1)
 
     # Meeple scarcity scaling
     meeples_left = 7 - bot_state.meeples_placed
