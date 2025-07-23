@@ -782,7 +782,7 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
     print(f'New set of structures we are tracking: {bot_state.claimed_structures}')
     print(f"Available structures: {structures}")  # Debug print
 
-    if bot_state.in_stealing_mode and len(bot_state.stealable_structs) > 0 and bot_state.meeples_placed >= 3:
+    if bot_state.in_stealing_mode and len(bot_state.stealable_structs) > 0 and bot_state.meeples_placed <= 6:
         for struct_tuple in bot_state.stealable_structs:
             curr_tile, steal_edge = struct_tuple[0], struct_tuple[1]
             if bot_state.last_tile == curr_tile:
