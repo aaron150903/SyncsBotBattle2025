@@ -221,7 +221,7 @@ def city_extension_bonus(game, connected_parts, structure_size, bot_state, struc
     else:
         claim_bonus = structure_size 
     
-    #bonus = 0
+    bonus = 0
     #has_our_claim = False
     
     #for tile, edge in connected_parts:
