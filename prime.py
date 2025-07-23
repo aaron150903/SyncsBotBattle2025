@@ -32,6 +32,7 @@ class BotState:
         # Store the structures we have claimed will track all
         self.claimed_structures = []
         self.unclaimed_open_spots = {}
+        self.in_stealing_mode = False
     
     def update_strat_pref(self, game_state):
         curr_points = game_state.me.points
@@ -648,6 +649,26 @@ def compute_probability_of_monastary_completion(tile, game):
     filled = 9 - empty
     # Have a simple way of estimating monastary completion for now
     return ((filled)*0.75)/8
+
+def corner_steal_bonus(move, game, bot_state):
+    curr_x, curr_y = move['tx'], move['ty']
+    curr_tile = move['tile']
+    grid = game.state.map._grid
+    directions = {(-1, -1): "bottom_edge", (-1, 1): "bottom_edge", (1, -1): "top_edge", (1, 1): "top_edge"}
+    my_edge = {"bottom_edge": "top_edge", "top_edge": "bottom_edge"}
+    for (dy, dx), neighbours_edge in directions.items():
+        nx, ny = curr_x + dx, curr_y + dy
+        if not (0 <= nx < MAX_MAP_LENGTH and 0 <= ny < MAX_MAP_LENGTH):
+                continue
+        corner_tile = grid[nx][ny]
+        if not corner_tile:
+            continue
+        my_tile_edge = my_edge[neighbours_edge]
+        
+
+
+
+
     
 def evaluate_meeple_placement(structure_type: StructureType, bot_state: BotState, edge, tile, game):
     strategy_bonus = 2 if bot_state.strat_pref == 'A' else 0

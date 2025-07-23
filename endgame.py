@@ -32,6 +32,8 @@ class BotState:
         # Store the structures we have claimed will track all
         self.claimed_structures = []
         self.unclaimed_open_spots = {}
+        self.stealable_structs = []
+        self.in_stealing_mode = False
     
     def update_strat_pref(self, game_state):
         curr_points = game_state.me.points
@@ -273,6 +275,36 @@ def opponent_monastary_extension_penalty(game, bot_state, move):
         return 2 * (1 + (placed / 9))
     return 0
 
+def corner_steal_bonus(move, game, bot_state, steal_value_threshold = 5):
+    curr_x, curr_y = move['tx'], move['ty']
+    curr_tile = move['tile']
+    grid = game.state.map._grid
+    directions = {(-1, -1): "bottom_edge", (-1, 1): "bottom_edge", (1, -1): "top_edge", (1, 1): "top_edge"}
+    my_edge = {"bottom_edge": "top_edge", "top_edge": "bottom_edge"}
+    steal_bonus = 0
+    tile_steals = []
+    for (dy, dx), neighbours_edge in directions.items():
+        nx, ny = curr_x + dx, curr_y + dy
+        if not (0 <= nx < MAX_MAP_LENGTH and 0 <= ny < MAX_MAP_LENGTH):
+                continue
+        corner_tile = grid[ny][nx]
+        if not corner_tile:
+            continue
+        my_tile_edge = my_edge[neighbours_edge]
+        if curr_tile.internal_edges.get(my_edge) != StructureType.CITY:
+            continue
+        if curr_tile.internal_edges.get(my_edge) != corner_tile.internal_edges.get(neighbours_edge):
+            continue
+        _, _, _, unique_tiles = analyze_structure_from_edge(corner_tile, neighbours_edge, grid)
+        curr_steal_value = len(unique_tiles) * 2
+        steal_bonus += curr_steal_value
+        if curr_steal_value >= steal_value_threshold:
+            tile_steals.append((curr_tile, my_tile_edge, curr_steal_value))
+            bot_state.in_stealing_mode = True
+    bot_state.stealable_structs = sorted(tile_steals, key=lambda x: x[2])  
+    return steal_bonus
+
+
 def evaluate_game_position_and_get_multipliers(game, bot_state):
     my_id = game.state.me.player_id
     players = list(game.state.players.values())
@@ -342,8 +374,9 @@ def evaluate_move(game, move, bot_state):
 
         if struct_type == StructureType.CITY:
             shield_bonus = get_shield_cities_count(unique_tiles) * (2.5 if bot_state.move >= 10 else 2)
+            stealing_bonus = corner_steal_bonus(move, game, bot_state, 5)
+            score += stealing_bonus
             base_score = size * 2 + shield_bonus
-
             if ownership:
                 score += city_extension_bonus(game, parts, size, bot_state, struct_type, True)
 
@@ -748,6 +781,16 @@ def handle_place_meeple_advanced(game: Game, bot_state: BotState, query: QueryPl
     bot_state.updated_claimed_structures(game)
     print(f'New set of structures we are tracking: {bot_state.claimed_structures}')
     print(f"Available structures: {structures}")  # Debug print
+
+    if bot_state.in_stealing_mode and len(bot_state.stealable_structs) > 0 and bot_state.meeples_placed >= 3:
+        for struct_tuple in bot_state.stealable_structs:
+            curr_tile, steal_edge = struct_tuple[0], struct_tuple[1]
+            if bot_state.last_tile == curr_tile:
+                bot_state.in_stealing_mode = False
+                bot_state.stealable_structs = []
+                return game.move_place_meeple(query, curr_tile._to_model(), placed_on=steal_edge)
+        bot_state.in_stealing_mode = False
+        bot_state.stealable_structs = []
     
     if structures:
         structure_scores = []
