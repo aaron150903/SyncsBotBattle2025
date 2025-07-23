@@ -340,10 +340,11 @@ def evaluate_move(game, move, bot_state):
                     else:
                         score += (base_score * probability) - penalty
             else:
-                if is_complete:
-                    score -= penalty * (1.5 if bot_state.move >= 10 else 1.0)
-                else:
-                    score -= penalty
+                if len(claimants) > 0:
+                    if is_complete:
+                        score -= penalty * (1.5 if bot_state.move >= 10 else 1.0)
+                    else:
+                       score -= penalty 
 
         elif struct_type in [StructureType.ROAD, StructureType.ROAD_START]:
             base_score = size
