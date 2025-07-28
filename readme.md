@@ -29,6 +29,9 @@ To get started you will have to:
 
 ## Meet The Team
 Aaron Emerson: https://www.linkedin.com/in/aaron-emerson/
+
 Erik Hai: https://www.linkedin.com/in/erik-hai/
+
 Mithil Patel: https://www.linkedin.com/in/mithil-patel-01b439228/
+
 Mustafa El Tannir: https://www.linkedin.com/in/mustafa-el-tannir/
