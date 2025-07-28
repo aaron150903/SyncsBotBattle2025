@@ -26,3 +26,9 @@ To get started you will have to:
 2. Create the environment `python -m venv .venv`
 3. Activate the environment
 4. Install requirements `pip install -e .`
+
+## Meet The Team
+Aaron Emerson: https://www.linkedin.com/in/aaron-emerson/
+Erik Hai: https://www.linkedin.com/in/erik-hai/
+Mithil Patel: https://www.linkedin.com/in/mithil-patel-01b439228/
+Mustafa El Tannir: https://www.linkedin.com/in/mustafa-el-tannir/
